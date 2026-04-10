@@ -8,22 +8,22 @@ Original file is located at
 """
 
 from streamlit_folium import st_folium
+import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
+import unicodedata
 import folium
 import json
-import matplotlib.pyplot as plt
-import unicodedata
 import re
 
 # =========================================
 # 1. 페이지 설정
 # =========================================
 st.set_page_config(layout="wide")
-st.title("🦠 Interactive Disease Dashboard (Chuquisaca)")
+st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
-# normalize
+#  2. normalize 함수 (핵심)
 # =========================================
 def normalize(text):
     text = str(text).strip()
@@ -33,7 +33,7 @@ def normalize(text):
     return text.upper()
 
 # =========================================
-# 데이터 로드
+# 3. 데이터 로드
 # =========================================
 @st.cache_data
 def load_data():
@@ -57,9 +57,13 @@ def load_data():
     df = df[df["municipio"].notna()]
     df = df[~df["municipio"].str.contains("TOTAL", na=False)]
 
+    # 공백 제거
     df["municipio"] = df["municipio"].str.strip()
+
+    # key 생성
     df["key"] = df["municipio"].apply(normalize)
 
+    # 결측 처리
     df["viv_roc"] = df["viv_roc"].fillna(0)
     df["viv_exist"] = df["viv_exist"].fillna(1)
 
@@ -69,45 +73,55 @@ def load_data():
     df["dengue"] = df["coverage"] * 0.8
     df["malaria"] = df["coverage"] * 0.5
 
+    # GeoJSON
     with open("gadm41_BOL_3.json") as f:
-        geojson = json.load(f)
+        geojson_data = json.load(f)
 
-    geojson["features"] = [
-        f for f in geojson["features"]
-        if f["properties"]["NAME_1"] == "Chuquisaca"
+    geojson_data["features"] = [
+        f for f in geojson_data["features"]
+        if f["properties"].get("NAME_1") == "Chuquisaca"
     ]
 
-    return df, geojson
+    return df, geojson_data
 
 df, geojson_data = load_data()
 
 # =========================================
-# 사이드바
+# 4. 사이드바
 # =========================================
-disease = st.sidebar.radio("Enfermedad", ["chagas", "dengue", "malaria"])
-threshold = st.sidebar.slider("Riesgo", 0.0, 1.0, 0.2)
+disease = st.sidebar.radio(
+    "Seleccionar enfermedad",
+    ["chagas", "dengue", "malaria"]
+)
+threshold = st.sidebar.slider("Criterio riesgo", 0.0, 1.0, 0.2)
 
 # =========================================
-# 매칭 함수
+# 5. KPI
+# =========================================
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Cobertura promedio", f"{df[disease].mean():.2%}")
+col2.metric("Total rociado", int(df["viv_roc"].sum()))
+col3.metric("Zonas riesgo", int((df[disease] < threshold).sum()))
+
+# =========================================
+# 6. 자동 매칭 함수
 # =========================================
 def get_row(name):
+
     key = normalize(name)
     row = df[df["key"] == key]
-    return row.iloc[0] if len(row) > 0 else None
+
+    if len(row) > 0:
+        return row.iloc[0]
+
+    return None
 
 # =========================================
-# centroid 계산 함수
-# =========================================
-def get_centroid(feature):
-    coords = feature["geometry"]["coordinates"][0][0]
-    lats = [p[1] for p in coords]
-    lons = [p[0] for p in coords]
-    return sum(lats)/len(lats), sum(lons)/len(lons)
-
-# =========================================
-# 지도 스타일
+# 7. 스타일
 # =========================================
 def style_function(feature):
+
     name = feature["properties"]["NAME_3"]
     row = get_row(name)
 
@@ -123,91 +137,60 @@ def style_function(feature):
     else:
         color = "#1a9850"
 
-    return {"fillColor": color, "color": "black", "weight": 1}
+    return {
+        "fillColor": color,
+        "color": "black",
+        "weight": 1,
+        "fillOpacity": 0.7
+    }
 
 # =========================================
-# 지도
+# 8. 지도
 # =========================================
-st.subheader("🗺️ Mapa")
+st.subheader("🗺️ Mapa Chuquisaca")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
-for f in geojson_data["features"]:
-    name = f["properties"]["NAME_3"]
+for feature in geojson_data["features"]:
+
+    name = feature["properties"]["NAME_3"]
     row = get_row(name)
 
-    popup = f"{name}"
     if row is not None:
-        popup += f"<br>{row[disease]:.2%}"
+        popup_html = f"""
+        <b>{name}</b><br>
+        Cobertura: {row[disease]:.2%}<br>
+        Casas rociadas: {int(row['viv_roc'])}<br>
+        Total viviendas: {int(row['viv_exist'])}
+        """
+    else:
+        popup_html = f"<b>{name}</b><br>Sin datos"
 
     folium.GeoJson(
-        f,
+        feature,
         style_function=style_function,
-        popup=popup
+        popup=folium.Popup(popup_html, max_width=250),
+        tooltip=name
     ).add_to(m)
 
-map_data = st_folium(m, width=900, height=500)
+st_folium(m, width=900, height=500)
 
 # =========================================
-# 🔥 클릭 → 지역 찾기
+# 9. TOP5 그래프
 # =========================================
-selected_region = None
+st.subheader("📊 TOP 5")
 
-if map_data and map_data.get("last_clicked"):
+top_df = df.nlargest(5, disease)
 
-    click_lat = map_data["last_clicked"]["lat"]
-    click_lon = map_data["last_clicked"]["lng"]
+fig, ax = plt.subplots(figsize=(6, 3))
 
-    min_dist = 999
-    closest_name = None
+bars = ax.bar(range(len(top_df)), top_df[disease])
 
-    for f in geojson_data["features"]:
-        lat, lon = get_centroid(f)
+for i, v in enumerate(top_df[disease]):
+    ax.text(i, v + 0.01, f"{v:.2f}", ha='center', fontsize=8)
 
-        dist = (lat - click_lat)**2 + (lon - click_lon)**2
+ax.set_xticks(range(len(top_df)))
+ax.set_xticklabels(top_df["municipio"], rotation=30, ha='right')
 
-        if dist < min_dist:
-            min_dist = dist
-            closest_name = f["properties"]["NAME_3"]
-
-    selected_region = closest_name
-
-# =========================================
-# 상세 패널 (핵심)
-# =========================================
-st.subheader("📍 Región seleccionada")
-
-if selected_region:
-
-    row = get_row(selected_region)
-
-    st.success(f"Seleccionado: {selected_region}")
-
-    if row is not None:
-
-        col1, col2, col3 = st.columns(3)
-
-        col1.metric("Cobertura", f"{row[disease]:.2%}")
-        col2.metric("Casas", int(row["viv_roc"]))
-        col3.metric("Total", int(row["viv_exist"]))
-
-        # 🔥 그래프 (지역 기준)
-        st.subheader("📊 Comparación de enfermedades")
-
-        fig, ax = plt.subplots(figsize=(5,3))
-
-        values = [row["chagas"], row["dengue"], row["malaria"]]
-
-        ax.bar(["Chagas", "Dengue", "Malaria"], values)
-
-        for i, v in enumerate(values):
-            ax.text(i, v + 0.01, f"{v:.2f}", ha='center')
-
-        plt.tight_layout()
-        st.pyplot(fig)
-
-    else:
-        st.warning("No hay datos")
-
-else:
-    st.info("👉 Haz clic en el mapa")
+plt.tight_layout()
+st.pyplot(fig)
