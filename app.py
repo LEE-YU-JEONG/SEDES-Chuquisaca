@@ -21,7 +21,33 @@ st.set_page_config(layout="wide")
 st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
-# 2. 데이터 로드
+# 🔥 2. 매핑 테이블 (핵심 해결)
+# =========================================
+mapping = {
+    "Azurduy": "AZURDUY",
+    "Tarvita": "TARVITA",
+    "VillaSerrano": "VILLA SERRANO",
+    "Huacareta": "HUACARETA",
+    "Monteagudo": "MONTEAGUDO",
+    "Huacaya": "HUACAYA",
+    "Machareti": "MACHARETI",
+    "VillaVacaGuzman": "VILLA VACA GUZMAN",
+    "Camargo": "CAMARGO",
+    "Incahuasi": "INCAHUASI",
+    "SanLucas": "SAN LUCAS",
+    "VillaCharcas": "VILLA CHARCAS",
+    "Poroma": "POROMA",
+    "Sucre": "SUCRE",
+    "Yotala": "YOTALA",
+    "Culpina": "CULPINA",
+    "LasCarreras": "LAS CARRERAS",
+    "VillaAbecia": "VILLA ABECIA",
+    "Alcala": "ALCALA",
+    "ElVillar": "EL VILLAR"
+}
+
+# =========================================
+# 3. 데이터 로드
 # =========================================
 @st.cache_data
 def load_data():
@@ -55,7 +81,6 @@ def load_data():
     with open("gadm41_BOL_3.json") as f:
         geojson_data = json.load(f)
 
-    # Chuquisaca만 필터
     geojson_data["features"] = [
         f for f in geojson_data["features"]
         if f["properties"].get("NAME_1") == "Chuquisaca"
@@ -66,7 +91,7 @@ def load_data():
 df, geojson_data = load_data()
 
 # =========================================
-# 3. 사이드바
+# 4. 사이드바
 # =========================================
 st.sidebar.header("⚙️ Configuración")
 
@@ -81,7 +106,7 @@ threshold = st.sidebar.slider(
 )
 
 # =========================================
-# 4. KPI
+# 5. KPI
 # =========================================
 col1, col2, col3 = st.columns(3)
 
@@ -90,14 +115,24 @@ col2.metric("🏠 Desinfección total", f"{int(df['viv_roc'].sum()):,}")
 col3.metric("⚠️ Zona de riesgo", int((df[disease] < threshold).sum()))
 
 # =========================================
-# 5. 데이터 매칭
+# 🔥 6. 매핑 기반 데이터 연결
 # =========================================
 def get_row(name):
-    row = df[df["municipio"].str.upper() == name.upper()]
-    return row.iloc[0] if len(row) > 0 else None
+
+    mapped_name = mapping.get(name, None)
+
+    if mapped_name is None:
+        return None
+
+    row = df[df["municipio"].str.upper() == mapped_name]
+
+    if len(row) > 0:
+        return row.iloc[0]
+
+    return None
 
 # =========================================
-# 6. 스타일 함수 + 팝업
+# 7. 스타일
 # =========================================
 top5 = df.nlargest(5, disease)["municipio"].str.upper().tolist()
 
@@ -112,15 +147,13 @@ def style_function(feature):
     value = row[disease]
 
     if value < threshold:
-        color = "red"
-    elif name.upper() in top5:
-        color = "blue"
+        color = "#d73027"
+    elif row["municipio"].upper() in top5:
+        color = "#4575b4"
     elif value < 0.3:
-        color = "green"
-    elif value < 0.6:
-        color = "yellow"
+        color = "#fee08b"
     else:
-        color = "orange"
+        color = "#1a9850"
 
     return {
         "fillColor": color,
@@ -130,25 +163,26 @@ def style_function(feature):
     }
 
 # =========================================
-# 7. 지도 생성
+# 8. 지도
 # =========================================
 st.subheader("🗺️ Chuquisaca Mapa")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
 for feature in geojson_data["features"]:
+
     name = feature["properties"]["NAME_3"]
     row = get_row(name)
 
     if row is not None:
         popup_html = f"""
         <b>{name}</b><br>
-        Coverage: {row[disease]:.2%}<br>
-        방역: {int(row['viv_roc'])}<br>
-        전체: {int(row['viv_exist'])}
+        Cobertura: {row[disease]:.2%}<br>
+        Casas rociadas: {int(row['viv_roc'])}<br>
+        Total viviendas: {int(row['viv_exist'])}
         """
     else:
-        popup_html = f"<b>{name}</b><br>데이터 없음"
+        popup_html = f"<b>{name}</b><br>Sin datos"
 
     folium.GeoJson(
         feature,
@@ -160,34 +194,33 @@ for feature in geojson_data["features"]:
 map_data = st_folium(m, width=900, height=500)
 
 # =========================================
-# 8. 클릭 상세 패널
+# 9. 상세 패널
 # =========================================
-st.subheader("📍 Detalle de la región")
-
-selected = None
+st.subheader("📍 Análisis detallado")
 
 if map_data and map_data.get("last_clicked"):
-    selected = map_data["last_clicked"]
-
-if selected:
-    # 좌표 기반이 아니라 이름 기반으로 처리 필요
-    st.info("팝업으로 정보 확인 가능")
+    st.success("✔ Región seleccionada (ver popup en mapa)")
 
 # =========================================
-# 9. TOP5 그래프 (라벨 밀림 해결)
+# 10. TOP5 그래프 (개선)
 # =========================================
-st.subheader("📊 TOP 5 지역")
+st.subheader("📊 TOP 5 Municipios")
 
 top_df = df.nlargest(5, disease)
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(6, 3))
 
-ax.bar(range(len(top_df)), top_df[disease])
+bars = ax.bar(range(len(top_df)), top_df[disease])
+
+# 값 표시
+for i, v in enumerate(top_df[disease]):
+    ax.text(i, v + 0.01, f"{v:.2f}", ha='center', fontsize=8)
 
 ax.set_xticks(range(len(top_df)))
-ax.set_xticklabels(top_df["municipio"], rotation=45, ha='right')
+ax.set_xticklabels(top_df["municipio"], rotation=30, ha='right')
 
-ax.set_title(f"Top 5 - {disease}")
+ax.set_title(f"Top 5 - {disease}", fontsize=10)
+ax.set_ylabel("Coverage")
 
 plt.tight_layout()
 st.pyplot(fig)
