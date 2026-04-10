@@ -4,8 +4,3 @@ folium
 streamlit-folium
 matplotlib
 openpyxl
-
-geopandas==0.13.2
-shapely==2.0.1
-pyproj==3.6.1
-fiona==1.9.5

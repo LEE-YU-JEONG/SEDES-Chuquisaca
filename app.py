@@ -12,25 +12,23 @@ Original file is located at
 # =========================================
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
-import unicodedata
-import re
-import branca.colormap as cm
+import json
 import matplotlib.pyplot as plt
 
 # =========================================
 # 1. 페이지 설정
 # =========================================
 st.set_page_config(layout="wide")
-st.title("🦠 Disease Monitoring Dashboard")
+st.title("🦠 Disease Dashboard (Chuquisaca)")
 
 # =========================================
 # 2. 데이터 로드
 # =========================================
 @st.cache_data
 def load_data():
+
     df = pd.read_excel(
         "Rociado Chuquisaca 2025.xlsx",
         sheet_name="RESUMEN_2",
@@ -52,37 +50,23 @@ def load_data():
 
     df["coverage"] = df["viv_roc"] / df["viv_exist"]
 
-    gdf = gpd.read_file("gadm41_BOL_3.json")
-    gdf = gdf[gdf["NAME_1"] == "Chuquisaca"].copy()
-    gdf["municipio"] = gdf["NAME_3"]
-
-    def normalize(x):
-        if pd.isna(x):
-            return ""
-        x = str(x)
-        x = unicodedata.normalize('NFKD', x).encode('ASCII', 'ignore').decode('ASCII')
-        x = re.sub(r"([a-z])([A-Z])", r"\1 \2", x)
-        x = x.replace(" ", "")
-        return x.upper().strip()
-
-    df["key"] = df["municipio"].apply(normalize)
-    gdf["key"] = gdf["municipio"].apply(normalize)
-
-    merged = gdf.merge(df, on="key", how="left")
-
     # 질병 데이터
-    merged["chagas"] = merged["coverage"]
-    merged["dengue"] = merged["coverage"] * 0.8
-    merged["malaria"] = merged["coverage"] * 0.5
+    df["chagas"] = df["coverage"]
+    df["dengue"] = df["coverage"] * 0.8
+    df["malaria"] = df["coverage"] * 0.5
 
-    return merged
+    # GeoJSON 로드
+    with open("gadm41_BOL_3.json") as f:
+        geojson_data = json.load(f)
 
-merged = load_data()
+    return df, geojson_data
+
+df, geojson_data = load_data()
 
 # =========================================
-# 3. 사이드바 (UI)
+# 3. 사이드바
 # =========================================
-st.sidebar.header("⚙️ Control Panel")
+st.sidebar.header("⚙️ 설정")
 
 disease = st.sidebar.radio(
     "질병 선택",
@@ -95,35 +79,43 @@ threshold = st.sidebar.slider(
 )
 
 # =========================================
-# 4. KPI 카드
+# 4. KPI
 # =========================================
-avg_cov = merged[disease].mean()
-total_roc = merged["viv_roc"].sum()
-risk_count = (merged[disease] < threshold).sum()
+avg_cov = df[disease].mean()
+total_roc = df["viv_roc"].sum()
+risk_count = (df[disease] < threshold).sum()
 
 col1, col2, col3 = st.columns(3)
 
 col1.metric("📊 평균 커버리지", f"{avg_cov:.2%}")
-col2.metric("🏠 총 방역 수", f"{int(total_roc):,}")
-col3.metric("⚠️ 위험 지역", int(risk_count))
+col2.metric("🏠 총 방역", f"{int(total_roc):,}")
+col3.metric("⚠️ 위험지역", int(risk_count))
 
 # =========================================
-# 5. TOP5
+# 5. 데이터 매칭 함수 (핵심)
 # =========================================
-top5 = merged.nlargest(5, disease)["municipio_x"].tolist()
+def get_value(feature):
+    name = feature["properties"]["NAME_3"]
+
+    row = df[df["municipio"].str.upper() == name.upper()]
+
+    if len(row) == 0:
+        return None
+
+    return float(row[disease].values[0])
 
 # =========================================
-# 6. 스타일 함수
+# 6. TOP5
 # =========================================
-colormap = cm.LinearColormap(
-    colors=["green", "yellow", "red"],
-    vmin=0,
-    vmax=1
-)
+top5 = df.nlargest(5, disease)["municipio"].str.upper().tolist()
 
+# =========================================
+# 7. 스타일 함수
+# =========================================
 def style_function(feature):
-    value = feature["properties"][disease]
-    name = feature["properties"]["municipio_x"]
+
+    value = get_value(feature)
+    name = feature["properties"]["NAME_3"].upper()
 
     if value is None:
         return {"fillColor": "gray", "color": "black", "weight": 1}
@@ -135,82 +127,72 @@ def style_function(feature):
         return {"fillColor": "blue", "color": "black", "weight": 3}
 
     return {
-        "fillColor": colormap(value),
+        "fillColor": "green" if value < 0.3 else "yellow" if value < 0.6 else "red",
         "color": "black",
         "weight": 1,
         "fillOpacity": 0.7
     }
 
 # =========================================
-# 7. 지도
+# 8. 지도
 # =========================================
 st.subheader("🗺️ 지도")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
-geo = folium.GeoJson(
-    merged[[
-        "geometry",
-        "municipio_x",
-        disease,
-        "viv_roc",
-        "viv_exist"
-    ]],
+folium.GeoJson(
+    geojson_data,
     style_function=style_function,
     tooltip=folium.GeoJsonTooltip(
-        fields=["municipio_x", disease],
-        aliases=["지역", "값"]
+        fields=["NAME_3"],
+        aliases=["지역"]
     )
 ).add_to(m)
 
-colormap.caption = "Coverage"
-colormap.add_to(m)
-
-# 클릭 데이터 받기
 map_data = st_folium(m, width=900, height=500)
 
 # =========================================
-# 8. 클릭 상세 패널
+# 9. 클릭 상세 패널
 # =========================================
-st.subheader("📍 지역 상세 정보")
+st.subheader("📍 지역 상세")
 
-selected_name = None
+selected = None
 
 if map_data and map_data.get("last_active_drawing"):
-    selected_name = map_data["last_active_drawing"]["properties"]["municipio_x"]
+    selected = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
-if selected_name:
-    selected_row = merged[merged["municipio_x"] == selected_name].iloc[0]
+if selected:
+    row = df[df["municipio"].str.upper() == selected.upper()]
 
-    colA, colB = st.columns(2)
+    if len(row) > 0:
+        row = row.iloc[0]
 
-    with colA:
-        st.markdown(f"### 📌 {selected_name}")
-        st.write(f"Coverage: {selected_row[disease]:.2%}")
-        st.write(f"방역: {selected_row['viv_roc']}")
-        st.write(f"전체: {selected_row['viv_exist']}")
+        colA, colB = st.columns(2)
 
-    with colB:
-        fig, ax = plt.subplots()
-        ax.bar(
-            ["Chagas", "Dengue", "Malaria"],
-            [selected_row["chagas"], selected_row["dengue"], selected_row["malaria"]]
-        )
-        ax.set_title("Disease Comparison")
-        st.pyplot(fig)
+        with colA:
+            st.markdown(f"### {selected}")
+            st.write(f"Coverage: {row[disease]:.2%}")
+            st.write(f"방역: {row['viv_roc']}")
+            st.write(f"전체: {row['viv_exist']}")
+
+        with colB:
+            fig, ax = plt.subplots()
+            ax.bar(
+                ["Chagas", "Dengue", "Malaria"],
+                [row["chagas"], row["dengue"], row["malaria"]]
+            )
+            st.pyplot(fig)
 
 else:
-    st.info("지도에서 지역을 클릭하세요")
+    st.info("지도에서 지역 클릭")
 
 # =========================================
-# 9. 전체 TOP5 그래프
+# 10. TOP5 그래프
 # =========================================
-st.subheader("📊 TOP 5 지역")
+st.subheader("📊 TOP 5")
 
-top_df = merged.nlargest(5, disease)
+top_df = df.nlargest(5, disease)
 
 fig, ax = plt.subplots()
-ax.bar(top_df["municipio_x"], top_df[disease])
-ax.set_title(f"Top 5 - {disease}")
-
+ax.bar(top_df["municipio"], top_df[disease])
 st.pyplot(fig)
