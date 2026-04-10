@@ -71,7 +71,10 @@ def load_data():
     df = df[df["municipio"].notna()]
     df = df[~df["municipio"].str.contains("TOTAL", na=False)]
 
-    df["coverage"] = df["viv_roc"] / df["viv_exist"]
+    df["viv_roc"] = df["viv_roc"].fillna(0)
+    df["viv_exist"] = df["viv_exist"].fillna(0)
+
+    df["coverage"] = df["viv_roc"] / df["viv_exist"].replace(0, 1)
 
     df["chagas"] = df["coverage"]
     df["dengue"] = df["coverage"] * 0.8
