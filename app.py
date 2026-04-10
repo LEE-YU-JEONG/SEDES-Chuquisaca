@@ -21,7 +21,7 @@ st.set_page_config(layout="wide")
 st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
-# 🔥 2. 매핑 테이블 (핵심 해결)
+# 2. 매핑 테이블 (핵심 해결)
 # =========================================
 mapping = {
     "Azurduy": "AZURDUY",
@@ -210,9 +210,7 @@ if map_data and map_data.get("last_clicked"):
 st.subheader("📊 TOP 5 Municipios")
 
 top_df = df.nlargest(5, disease)
-
 fig, ax = plt.subplots(figsize=(6, 3))
-
 bars = ax.bar(range(len(top_df)), top_df[disease])
 
 # 값 표시
@@ -225,5 +223,22 @@ ax.set_xticklabels(top_df["municipio"], rotation=30, ha='right')
 ax.set_title(f"Top 5 - {disease}", fontsize=10)
 ax.set_ylabel("Coverage")
 
-plt.tight_layout()
+st.subheader("📋 Excel 지역 목록")
+st.write(sorted(df["municipio"].unique()))
+
+st.subheader("🗺️ GeoJSON 지역 목록")
+geo_names = [f["properties"]["NAME_3"] for f in geojson_data["features"]]
+st.write(sorted(geo_names))
+
+compare_df = pd.DataFrame({
+    "geojson": sorted(geo_names),
+})
+
+compare_df["matched"] = compare_df["geojson"].apply(
+    lambda x: x.upper() in df["municipio"].str.upper().values
+)
+
+st.subheader("🔍 매칭 여부 확인")
+st.dataframe(compare_df)
+
 st.pyplot(fig)
