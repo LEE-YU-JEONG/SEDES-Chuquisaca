@@ -7,10 +7,10 @@ Original file is located at
     https://colab.research.google.com/drive/1n_mNxc74hx_rnIxdFxfltWiSNkzwotJi
 """
 
+from streamlit_folium import st_folium
 import streamlit as st
 import pandas as pd
 import folium
-from streamlit_folium import st_folium
 import json
 import matplotlib.pyplot as plt
 
@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 # 1. 페이지 설정
 # =========================================
 st.set_page_config(layout="wide")
-st.title("🦠 Disease Dashboard (Chuquisaca)")
+st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
 # 2. 데이터 로드
@@ -68,15 +68,15 @@ df, geojson_data = load_data()
 # =========================================
 # 3. 사이드바
 # =========================================
-st.sidebar.header("⚙️ 설정")
+st.sidebar.header("⚙️ Configuración")
 
 disease = st.sidebar.radio(
-    "질병 선택",
+    "Seleccionar enfermedad",
     ["chagas", "dengue", "malaria"]
 )
 
 threshold = st.sidebar.slider(
-    "위험 기준",
+    "Criterios de riesgo",
     0.0, 1.0, 0.2
 )
 
@@ -85,9 +85,9 @@ threshold = st.sidebar.slider(
 # =========================================
 col1, col2, col3 = st.columns(3)
 
-col1.metric("📊 평균 커버리지", f"{df[disease].mean():.2%}")
-col2.metric("🏠 총 방역", f"{int(df['viv_roc'].sum()):,}")
-col3.metric("⚠️ 위험지역", int((df[disease] < threshold).sum()))
+col1.metric("📊 Cobertura promedio", f"{df[disease].mean():.2%}")
+col2.metric("🏠 Desinfección total", f"{int(df['viv_roc'].sum()):,}")
+col3.metric("⚠️ Zona de riesgo", int((df[disease] < threshold).sum()))
 
 # =========================================
 # 5. 데이터 매칭
@@ -132,7 +132,7 @@ def style_function(feature):
 # =========================================
 # 7. 지도 생성
 # =========================================
-st.subheader("🗺️ 지도")
+st.subheader("🗺️ Chuquisaca Mapa")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
@@ -162,7 +162,7 @@ map_data = st_folium(m, width=900, height=500)
 # =========================================
 # 8. 클릭 상세 패널
 # =========================================
-st.subheader("📍 지역 상세")
+st.subheader("📍 Detalle de la región")
 
 selected = None
 
@@ -189,6 +189,5 @@ ax.set_xticklabels(top_df["municipio"], rotation=45, ha='right')
 
 ax.set_title(f"Top 5 - {disease}")
 
-plt.tight_layout()  # ✅ 핵심 (라벨 밀림 해결)
-
+plt.tight_layout()
 st.pyplot(fig)
