@@ -50,14 +50,19 @@ def load_data():
 
     df["coverage"] = df["viv_roc"] / df["viv_exist"]
 
-    # 질병 데이터
     df["chagas"] = df["coverage"]
     df["dengue"] = df["coverage"] * 0.8
     df["malaria"] = df["coverage"] * 0.5
 
     # GeoJSON 로드
-    with open("gadm41_BOL_3.json") as f:
+    with open("chuquisaca.geojson") as f:
         geojson_data = json.load(f)
+
+    # ✅ Chuquisaca만 필터
+    geojson_data["features"] = [
+        f for f in geojson_data["features"]
+        if f["properties"].get("NAME_1") == "Chuquisaca"
+    ]
 
     return df, geojson_data
 
@@ -81,118 +86,112 @@ threshold = st.sidebar.slider(
 # =========================================
 # 4. KPI
 # =========================================
-avg_cov = df[disease].mean()
-total_roc = df["viv_roc"].sum()
-risk_count = (df[disease] < threshold).sum()
-
 col1, col2, col3 = st.columns(3)
 
-col1.metric("📊 평균 커버리지", f"{avg_cov:.2%}")
-col2.metric("🏠 총 방역", f"{int(total_roc):,}")
-col3.metric("⚠️ 위험지역", int(risk_count))
+col1.metric("📊 평균 커버리지", f"{df[disease].mean():.2%}")
+col2.metric("🏠 총 방역", f"{int(df['viv_roc'].sum()):,}")
+col3.metric("⚠️ 위험지역", int((df[disease] < threshold).sum()))
 
 # =========================================
-# 5. 데이터 매칭 함수 (핵심)
+# 5. 데이터 매칭
 # =========================================
-def get_value(feature):
-    name = feature["properties"]["NAME_3"]
-
+def get_row(name):
     row = df[df["municipio"].str.upper() == name.upper()]
-
-    if len(row) == 0:
-        return None
-
-    return float(row[disease].values[0])
+    return row.iloc[0] if len(row) > 0 else None
 
 # =========================================
-# 6. TOP5
+# 6. 스타일 함수 + 팝업
 # =========================================
 top5 = df.nlargest(5, disease)["municipio"].str.upper().tolist()
 
-# =========================================
-# 7. 스타일 함수
-# =========================================
 def style_function(feature):
 
-    value = get_value(feature)
-    name = feature["properties"]["NAME_3"].upper()
+    name = feature["properties"]["NAME_3"]
+    row = get_row(name)
 
-    if value is None:
+    if row is None:
         return {"fillColor": "gray", "color": "black", "weight": 1}
 
-    if value < threshold:
-        return {"fillColor": "red", "color": "black", "weight": 2}
+    value = row[disease]
 
-    if name in top5:
-        return {"fillColor": "blue", "color": "black", "weight": 3}
+    if value < threshold:
+        color = "red"
+    elif name.upper() in top5:
+        color = "blue"
+    elif value < 0.3:
+        color = "green"
+    elif value < 0.6:
+        color = "yellow"
+    else:
+        color = "orange"
 
     return {
-        "fillColor": "green" if value < 0.3 else "yellow" if value < 0.6 else "red",
+        "fillColor": color,
         "color": "black",
         "weight": 1,
         "fillOpacity": 0.7
     }
 
 # =========================================
-# 8. 지도
+# 7. 지도 생성
 # =========================================
 st.subheader("🗺️ 지도")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
-folium.GeoJson(
-    geojson_data,
-    style_function=style_function,
-    tooltip=folium.GeoJsonTooltip(
-        fields=["NAME_3"],
-        aliases=["지역"]
-    )
-).add_to(m)
+for feature in geojson_data["features"]:
+    name = feature["properties"]["NAME_3"]
+    row = get_row(name)
+
+    if row is not None:
+        popup_html = f"""
+        <b>{name}</b><br>
+        Coverage: {row[disease]:.2%}<br>
+        방역: {int(row['viv_roc'])}<br>
+        전체: {int(row['viv_exist'])}
+        """
+    else:
+        popup_html = f"<b>{name}</b><br>데이터 없음"
+
+    folium.GeoJson(
+        feature,
+        style_function=style_function,
+        popup=folium.Popup(popup_html, max_width=250),
+        tooltip=name
+    ).add_to(m)
 
 map_data = st_folium(m, width=900, height=500)
 
 # =========================================
-# 9. 클릭 상세 패널
+# 8. 클릭 상세 패널
 # =========================================
 st.subheader("📍 지역 상세")
 
 selected = None
 
-if map_data and map_data.get("last_active_drawing"):
-    selected = map_data["last_active_drawing"]["properties"]["NAME_3"]
+if map_data and map_data.get("last_clicked"):
+    selected = map_data["last_clicked"]
 
 if selected:
-    row = df[df["municipio"].str.upper() == selected.upper()]
-
-    if len(row) > 0:
-        row = row.iloc[0]
-
-        colA, colB = st.columns(2)
-
-        with colA:
-            st.markdown(f"### {selected}")
-            st.write(f"Coverage: {row[disease]:.2%}")
-            st.write(f"방역: {row['viv_roc']}")
-            st.write(f"전체: {row['viv_exist']}")
-
-        with colB:
-            fig, ax = plt.subplots()
-            ax.bar(
-                ["Chagas", "Dengue", "Malaria"],
-                [row["chagas"], row["dengue"], row["malaria"]]
-            )
-            st.pyplot(fig)
-
-else:
-    st.info("지도에서 지역 클릭")
+    # 좌표 기반이 아니라 이름 기반으로 처리 필요
+    st.info("팝업으로 정보 확인 가능")
 
 # =========================================
-# 10. TOP5 그래프
+# 9. TOP5 그래프 (라벨 밀림 해결)
 # =========================================
-st.subheader("📊 TOP 5")
+st.subheader("📊 TOP 5 지역")
 
 top_df = df.nlargest(5, disease)
 
 fig, ax = plt.subplots()
-ax.bar(top_df["municipio"], top_df[disease])
+
+ax.bar(range(len(top_df)), top_df[disease])
+
+ax.set_xticks(range(len(top_df)))
+ax.set_xticklabels(top_df["municipio"], rotation=45, ha='right')
+
+ax.set_title(f"Top 5 - {disease}")
+
+plt.tight_layout()  # ✅ 핵심 (라벨 밀림 해결)
+
 st.pyplot(fig)
