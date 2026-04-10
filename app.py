@@ -13,6 +13,8 @@ import pandas as pd
 import folium
 import json
 import matplotlib.pyplot as plt
+import unicodedata
+import re
 
 # =========================================
 # 1. 페이지 설정
@@ -21,30 +23,14 @@ st.set_page_config(layout="wide")
 st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
-# 2. 매핑 테이블 (핵심 해결)
+# 🔥 2. normalize 함수 (핵심)
 # =========================================
-mapping = {
-    "Azurduy": "AZURDUY",
-    "Tarvita": "TARVITA",
-    "VillaSerrano": "VILLA SERRANO",
-    "Huacareta": "HUACARETA",
-    "Monteagudo": "MONTEAGUDO",
-    "Huacaya": "HUACAYA",
-    "Machareti": "MACHARETI",
-    "VillaVacaGuzman": "VILLA VACA GUZMAN",
-    "Camargo": "CAMARGO",
-    "Incahuasi": "INCAHUASI",
-    "SanLucas": "SAN LUCAS",
-    "VillaCharcas": "VILLA CHARCAS",
-    "Poroma": "POROMA",
-    "Sucre": "SUCRE",
-    "Yotala": "YOTALA",
-    "Culpina": "CULPINA",
-    "LasCarreras": "LAS CARRERAS",
-    "VillaAbecia": "VILLA ABECIA",
-    "Alcala": "ALCALA",
-    "ElVillar": "EL VILLAR"
-}
+def normalize(text):
+    text = str(text).strip()
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    text = re.sub(r'[^a-zA-Z0-9]', '', text)
+    return text.upper()
 
 # =========================================
 # 3. 데이터 로드
@@ -71,16 +57,23 @@ def load_data():
     df = df[df["municipio"].notna()]
     df = df[~df["municipio"].str.contains("TOTAL", na=False)]
 
-    df["viv_roc"] = df["viv_roc"].fillna(0)
-    df["viv_exist"] = df["viv_exist"].fillna(0)
+    # 🔥 공백 제거
+    df["municipio"] = df["municipio"].str.strip()
 
-    df["coverage"] = df["viv_roc"] / df["viv_exist"].replace(0, 1)
+    # 🔥 key 생성
+    df["key"] = df["municipio"].apply(normalize)
+
+    # 결측 처리
+    df["viv_roc"] = df["viv_roc"].fillna(0)
+    df["viv_exist"] = df["viv_exist"].fillna(1)
+
+    df["coverage"] = df["viv_roc"] / df["viv_exist"]
 
     df["chagas"] = df["coverage"]
     df["dengue"] = df["coverage"] * 0.8
     df["malaria"] = df["coverage"] * 0.5
 
-    # GeoJSON 로드
+    # GeoJSON
     with open("gadm41_BOL_3.json") as f:
         geojson_data = json.load(f)
 
@@ -96,38 +89,30 @@ df, geojson_data = load_data()
 # =========================================
 # 4. 사이드바
 # =========================================
-st.sidebar.header("⚙️ Configuración")
-
 disease = st.sidebar.radio(
     "Seleccionar enfermedad",
     ["chagas", "dengue", "malaria"]
 )
 
-threshold = st.sidebar.slider(
-    "Criterios de riesgo",
-    0.0, 1.0, 0.2
-)
+threshold = st.sidebar.slider("Criterio riesgo", 0.0, 1.0, 0.2)
 
 # =========================================
 # 5. KPI
 # =========================================
 col1, col2, col3 = st.columns(3)
 
-col1.metric("📊 Cobertura promedio", f"{df[disease].mean():.2%}")
-col2.metric("🏠 Desinfección total", f"{int(df['viv_roc'].sum()):,}")
-col3.metric("⚠️ Zona de riesgo", int((df[disease] < threshold).sum()))
+col1.metric("Cobertura promedio", f"{df[disease].mean():.2%}")
+col2.metric("Total rociado", int(df["viv_roc"].sum()))
+col3.metric("Zonas riesgo", int((df[disease] < threshold).sum()))
 
 # =========================================
-# 🔥 6. 매핑 기반 데이터 연결
+# 🔥 6. 자동 매칭 함수
 # =========================================
 def get_row(name):
 
-    mapped_name = mapping.get(name, None)
+    key = normalize(name)
 
-    if mapped_name is None:
-        return None
-
-    row = df[df["municipio"].str.upper() == mapped_name]
+    row = df[df["key"] == key]
 
     if len(row) > 0:
         return row.iloc[0]
@@ -137,8 +122,6 @@ def get_row(name):
 # =========================================
 # 7. 스타일
 # =========================================
-top5 = df.nlargest(5, disease)["municipio"].str.upper().tolist()
-
 def style_function(feature):
 
     name = feature["properties"]["NAME_3"]
@@ -151,8 +134,6 @@ def style_function(feature):
 
     if value < threshold:
         color = "#d73027"
-    elif row["municipio"].upper() in top5:
-        color = "#4575b4"
     elif value < 0.3:
         color = "#fee08b"
     else:
@@ -168,7 +149,7 @@ def style_function(feature):
 # =========================================
 # 8. 지도
 # =========================================
-st.subheader("🗺️ Chuquisaca Mapa")
+st.subheader("🗺️ Mapa Chuquisaca")
 
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
@@ -194,51 +175,24 @@ for feature in geojson_data["features"]:
         tooltip=name
     ).add_to(m)
 
-map_data = st_folium(m, width=900, height=500)
+st_folium(m, width=900, height=500)
 
 # =========================================
-# 9. 상세 패널
+# 9. TOP5 그래프
 # =========================================
-st.subheader("📍 Análisis detallado")
-
-if map_data and map_data.get("last_clicked"):
-    st.success("✔ Región seleccionada (ver popup en mapa)")
-
-# =========================================
-# 10. TOP5 그래프 (개선)
-# =========================================
-st.subheader("📊 TOP 5 Municipios")
+st.subheader("📊 TOP 5")
 
 top_df = df.nlargest(5, disease)
+
 fig, ax = plt.subplots(figsize=(6, 3))
+
 bars = ax.bar(range(len(top_df)), top_df[disease])
 
-# 값 표시
 for i, v in enumerate(top_df[disease]):
     ax.text(i, v + 0.01, f"{v:.2f}", ha='center', fontsize=8)
 
 ax.set_xticks(range(len(top_df)))
 ax.set_xticklabels(top_df["municipio"], rotation=30, ha='right')
 
-ax.set_title(f"Top 5 - {disease}", fontsize=10)
-ax.set_ylabel("Coverage")
-
-st.subheader("📋 Excel 지역 목록")
-st.write(sorted(df["municipio"].unique()))
-
-st.subheader("🗺️ GeoJSON 지역 목록")
-geo_names = [f["properties"]["NAME_3"] for f in geojson_data["features"]]
-st.write(sorted(geo_names))
-
-compare_df = pd.DataFrame({
-    "geojson": sorted(geo_names),
-})
-
-compare_df["matched"] = compare_df["geojson"].apply(
-    lambda x: x.upper() in df["municipio"].str.upper().values
-)
-
-st.subheader("🔍 매칭 여부 확인")
-st.dataframe(compare_df)
-
+plt.tight_layout()
 st.pyplot(fig)
