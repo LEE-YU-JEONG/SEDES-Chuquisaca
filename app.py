@@ -55,7 +55,7 @@ def load_data():
     df["malaria"] = df["coverage"] * 0.5
 
     # GeoJSON 로드
-    with open("chuquisaca.geojson") as f:
+    with open("gadm41_BOL_3") as f:
         geojson_data = json.load(f)
 
     # ✅ Chuquisaca만 필터
