@@ -225,7 +225,7 @@ st.title("🦠 Disease Monitoring Dashboard")
 @st.cache_data
 def load_data():
     df = pd.read_excel(
-        "/content/drive/MyDrive/Data/Rociado Chuquisaca 2025.xlsx",
+        "Rociado Chuquisaca 2025.xlsx",
         sheet_name="RESUMEN_2",
         skiprows=8,
         nrows=31
@@ -245,7 +245,7 @@ def load_data():
 
     df["coverage"] = df["viv_roc"] / df["viv_exist"]
 
-    gdf = gpd.read_file("/content/drive/MyDrive/Data/gadm41_BOL_3.json")
+    gdf = gpd.read_file("gadm41_BOL_3.json")
     gdf = gdf[gdf["NAME_1"] == "Chuquisaca"].copy()
     gdf["municipio"] = gdf["NAME_3"]
 
