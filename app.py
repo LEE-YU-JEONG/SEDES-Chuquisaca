@@ -7,9 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1n_mNxc74hx_rnIxdFxfltWiSNkzwotJi
 """
 
-# =========================================
-# 0. 라이브러리
-# =========================================
 import streamlit as st
 import pandas as pd
 import folium
@@ -55,10 +52,10 @@ def load_data():
     df["malaria"] = df["coverage"] * 0.5
 
     # GeoJSON 로드
-    with open("gadm41_BOL_3") as f:
+    with open("gadm41_BOL_3.json") as f:
         geojson_data = json.load(f)
 
-    # ✅ Chuquisaca만 필터
+    # Chuquisaca만 필터
     geojson_data["features"] = [
         f for f in geojson_data["features"]
         if f["properties"].get("NAME_1") == "Chuquisaca"
