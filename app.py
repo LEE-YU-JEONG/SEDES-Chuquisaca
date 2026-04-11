@@ -326,7 +326,7 @@ def load_basic():
 # =========================================
 @st.cache_data
 def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx")
+    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado")
 
     # 컬럼 정리
     df.columns = (
