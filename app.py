@@ -372,7 +372,7 @@ dengue_df, dengue_raw = load_dengue()
 # =========================================
 # 4. geoJSON
 # =========================================
-with open("gadm41_BOL_3.json") as f:
+with open("Data/gadm41_BOL_3.json") as f:
     geojson = json.load(f)
 
 geojson["features"] = [f for f in geojson["features"] if f["properties"]["NAME_1"]=="Chuquisaca"]
