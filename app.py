@@ -262,54 +262,49 @@ with col_map:
     map_data = st_folium(m, width=800, height=500)
 
 # FLOATING LEGEND
-st.markdown(
-    """
-    <div style="
-        position: sticky;
-        top: 20px;
+with col_legend:
+    st.markdown(
+        """
+        <div style="
+            background: white;
+            padding: 14px 14px 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.12);
 
-        background: white;
-        padding: 14px 14px 12px 14px;
-        border-radius: 12px;
-        border: 1px solid #ddd;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.12);
+            font-size: 15px;
+            margin-left: -200px;
+        ">
 
-       font-size: 15px;
-       margin-left: -200px;
-    ">
+        <div style="
+            font-size:18px;
+            font-weight:800;
+            color:#2b83ba;
+            margin-bottom:6px;
+        ">
+            ⚠️ Nivel de Riesgo
+        </div>
 
-    <!-- TITLE -->
-    <div style="
-        font-size:18px;
-        font-weight:800;
-        color:#2b83ba;
-        text-align:left;
-        margin-bottom:6px;
-    ">
-        ⚠️ Nivel de Riesgo
-    </div>
+        <hr style="margin:6px 0 10px 0; border:0.5px solid #e0e0e0;">
 
-    <hr style="margin:6px 0 10px 0; border:0.5px solid #e0e0e0;">
+        <div style="line-height:1.6;">
 
-    <!-- CONTENT -->
-    <div style="line-height:1.6;">
+            🟢 <b>Bajo</b> (&lt;5)<br>
+            🟡 <b>Medio</b> (5–15)<br>
+            🔴 <b>Alto</b> (&gt;15)<br>
 
-        🟢 <b>Bajo</b> (&lt;5)<br>
-        🟡 <b>Medio</b> (5–15)<br>
-        🔴 <b>Alto</b> (&gt;15)<br>
+            <br>
 
-        <br>
+            🟣 <b>Hotspot</b><br>
+            🔵 <b>Seleccionado</b><br>
+            ⚪ <b>Sin datos</b>
 
-        🟣 <b>Hotspot</b><br>
-        🔵 <b>Seleccionado</b><br>
-        ⚪ <b>Sin datos</b>
+        </div>
 
-    </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # =========================================
 # 14. Toggle
