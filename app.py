@@ -211,7 +211,7 @@ def style(feature):
     # SELECTED
     if st.session_state.selected_municipio == name:
         return {
-            "fillColor": "#041c4c",
+            "fillColor": "#4fc3f7",
             "fillOpacity": 1.0,
             "color": "#00d4ff",
             "weight": 6,
@@ -221,14 +221,14 @@ def style(feature):
     # HOTSPOT
     if show_hotspot and row.get("is_hotspot", False):
         return {
-            "fillColor": "#6a00ff",
+            "fillColor": "#8e7cc3",
             "fillOpacity": 0.85,
             "weight": 3
         }
 
     # NORMAL COLOR SCALE
     val = safe_float(row.get("value"))
-    color = "#1a9850" if val < 5 else "#fee08b" if val < 15 else "#d73027"
+    color = "#1a9850" if val < 5 else "#fee08b" if val < 15 else "#b30000"
 
     return {
         "fillColor": color,
