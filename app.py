@@ -204,38 +204,45 @@ with col_map:
     map_data = st_folium(m, width=800, height=500)
 
 with col_legend:
-    # 스타일 깨짐 방지를 위해 박스 설정을 초기화하고 다시 적용
+    # position: sticky 대신 relative 사용 및 min-width 보정
     st.markdown(
         """
         <div style="
             background-color: #1e1e1e;
             color: #ffffff;
-            padding: 20px;
+            padding: 25px;
             border-radius: 12px;
             border: 1px solid #333;
             box-shadow: 2px 2px 10px rgba(0,0,0,0.35);
 
-            width: 130%;           /* 컬럼 밖으로 적당히 확장 */
-            margin-left: -70px;    /* 지도로부터 적절한 거리 조절 */
-            height: 500px;         /* 지도의 height와 일치 */
+            width: 110%;
+            margin-left: -10px;
 
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
             font-size: 15px;
+            min-width: 300px;
+            position: relative;
+            z-index: 10;
         ">
-            <div style="font-size: 19px; font-weight: 900; color: #4fc3f7; margin-bottom: 12px;">
+            <div style="
+                font-size: 20px;
+                font-weight: 900;
+                color: #4fc3f7;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            ">
                 ⚠️ Nivel de Riesgo
             </div>
-            <hr style="margin: 0 0 15px 0; border: 0.5px solid #444;">
-            <div style="line-height: 2.3;">
-                <span style="color: #1a9850; font-size: 18px;">●</span> <b>Bajo</b> (&lt;5)<br>
-                <span style="color: #fee08b; font-size: 18px;">●</span> <b>Medio</b> (5–15)<br>
-                <span style="color: #b30000; font-size: 18px;">●</span> <b>Alto</b> (&gt;15)<br>
-                <div style="margin: 10px 0; border-top: 1px dashed #444;"></div>
-                <span style="color: #8e7cc3; font-size: 18px;">●</span> <b>Hotspot</b><br>
-                <span style="color: #4fc3f7; font-size: 18px;">●</span> <b>Seleccionado</b><br>
-                <span style="color: gray; font-size: 18px;">●</span> <b>Sin datos</b>
+            <hr style="margin: 10px 0; border: 0.5px solid #444;">
+            <div style="line-height: 1.8;">
+                <span style="color: #1a9850;">●</span> <b>Bajo</b> (&lt;5)<br>
+                <span style="color: #fee08b;">●</span> <b>Medio</b> (5–15)<br>
+                <span style="color: #b30000;">●</span> <b>Alto</b> (&gt;15)<br>
+                <br>
+                <span style="color: #8e7cc3;">●</span> <b>Hotspot</b><br>
+                <span style="color: #4fc3f7;">●</span> <b>Seleccionado</b><br>
+                <span style="color: gray;">●</span> <b>Sin datos</b>
             </div>
         </div>
         """,
