@@ -17,7 +17,7 @@ Original file is located at
 # import plotly.express as px
 
 # # =========================================
-# # 0. 설정
+# # 설정
 # # =========================================
 # st.set_page_config(layout="wide")
 # st.title("🦠 Informe Epidemiológico - Chuquisaca")
@@ -156,6 +156,15 @@ Original file is located at
 #     st.session_state.selected_municipio = df.iloc[0]["municipio"]
 
 # # =========================================
+# # HOTSPOT 계산
+# # =========================================
+# if len(df) > 0:
+#     cutoff = df["value"].quantile(0.9)
+#     df["is_hotspot"] = df["value"] >= cutoff
+# else:
+#     df["is_hotspot"] = False
+
+# # =========================================
 # # HOTSPOT 배너
 # # =========================================
 # top3 = df.sort_values("value", ascending=False).head(3)
@@ -173,30 +182,6 @@ Original file is located at
 #     """, unsafe_allow_html=True)
 
 # # =========================================
-# # 정렬
-# # =========================================
-# if sort_option == "Mayor valor":
-#     df_sorted = df.sort_values("value", ascending=False)
-# elif sort_option == "Menor valor":
-#     df_sorted = df.sort_values("value", ascending=True)
-# elif sort_option == "Nombre A-Z":
-#     df_sorted = df.sort_values("municipio")
-# else:
-#     df_sorted = df.sort_values("municipio", ascending=False)
-
-# df_filtered = df_sorted.head(top_n)
-
-# # =========================================
-# # KPI
-# # =========================================
-# st.subheader("📊 Resumen general")
-
-# col1, col2, col3 = st.columns(3)
-# col1.metric("Promedio", f"{df['value'].mean():.2f}")
-# col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"] if len(df)>0 else "-")
-# col3.metric("Total", len(df))
-
-# # =========================================
 # # MAP
 # # =========================================
 # def get_row(name):
@@ -211,11 +196,14 @@ Original file is located at
 #     if row is None:
 #         return {"fillColor":"gray"}
 
-#     val = safe_float(row.get("value"))
-#     color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
-
 #     if st.session_state.selected_municipio == name:
 #         return {"fillColor":"#2b83ba","color":"yellow","weight":4}
+
+#     if show_hotspot and row.get("is_hotspot", False):
+#         return {"fillColor":"#6a00ff","weight":3}
+
+#     val = safe_float(row.get("value"))
+#     color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
 
 #     return {"fillColor":color,"fillOpacity":0.7}
 
@@ -227,10 +215,7 @@ Original file is located at
 #     folium.GeoJson(
 #         f,
 #         style_function=style,
-#         tooltip=folium.GeoJsonTooltip(
-#             fields=["NAME_3"],
-#             aliases=["Municipio:"]
-#         )
+#         tooltip=folium.GeoJsonTooltip(fields=["NAME_3"], aliases=[""])
 #     ).add_to(m)
 
 # map_data = st_folium(m, width=800, height=500)
@@ -239,53 +224,33 @@ Original file is located at
 #     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # # =========================================
-# # DETALLE
-# # =========================================
-# if st.session_state.selected_municipio:
-#     st.subheader(f"📍 {st.session_state.selected_municipio}")
-
-#     if disease == "malaria":
-#         st.dataframe(
-#             malaria_raw[
-#                 malaria_raw["key"] == normalize(st.session_state.selected_municipio)
-#             ].drop(columns=["key"], errors="ignore")
-#         )
-
-#     elif disease == "dengue":
-#         st.dataframe(
-#             dengue_raw[
-#                 dengue_raw["key"] == normalize(st.session_state.selected_municipio)
-#             ].drop(columns=["key"], errors="ignore")
-#         )
-
-#     else:
-#         r = get_row(st.session_state.selected_municipio)
-#         if r is not None:
-#             st.json(r.to_dict())
-
-# # =========================================
 # # 그래프
 # # =========================================
 # st.subheader("📊 Distribución")
-
-# fig = px.bar(df_filtered, x="municipio", y="value")
-# st.plotly_chart(fig, use_container_width=True)
+# st.plotly_chart(px.bar(df, x="municipio", y="value"), use_container_width=True)
 
 # # =========================================
 # # 월별
 # # =========================================
-# if disease=="malaria":
-#     st.subheader("📈 Tendencia mensual")
-#     monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
-#     st.plotly_chart(px.line(monthly, x="Mes", y="TOTAL", markers=True), use_container_width=True)
+# mes_map = {
+#     1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
+#     7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
+# }
 
 # if disease=="dengue":
 #     st.subheader("📈 Tendencia mensual")
 
 #     monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
+#     monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
 
 #     st.plotly_chart(
-#         px.line(monthly, x="Mes", y="value", markers=True),
+#         px.line(
+#             monthly,
+#             x="Mes_nombre",
+#             y="value",
+#             markers=True,
+#             category_orders={"Mes_nombre": list(mes_map.values())}
+#         ),
 #         use_container_width=True
 #     )
 
@@ -293,7 +258,7 @@ Original file is located at
 # # 테이블
 # # =========================================
 # st.subheader("📋 Datos detallados")
-# st.dataframe(df_filtered.drop(columns=["key"], errors="ignore"))
+# st.dataframe(df.drop(columns=["key"], errors="ignore"))
 
 from streamlit_folium import st_folium
 import streamlit as st
@@ -347,6 +312,11 @@ def load_malaria():
     df["key"] = df["Municipio"].apply(normalize)
 
     df["TOTAL"] = pd.to_numeric(df["TOTAL"], errors="coerce").fillna(0)
+
+    # 🔥 Mes 컬럼 없을 경우 생성
+    if "Mes" not in df.columns:
+        if "Fecha" in df.columns:
+            df["Mes"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.month
 
     grouped = df.groupby("key").agg({
         "Municipio":"first",
@@ -525,6 +495,7 @@ mes_map = {
     7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
 }
 
+# Dengue
 if disease=="dengue":
     st.subheader("📈 Tendencia mensual")
 
@@ -532,15 +503,24 @@ if disease=="dengue":
     monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
 
     st.plotly_chart(
-        px.line(
-            monthly,
-            x="Mes_nombre",
-            y="value",
-            markers=True,
-            category_orders={"Mes_nombre": list(mes_map.values())}
-        ),
+        px.line(monthly, x="Mes_nombre", y="value", markers=True,
+                category_orders={"Mes_nombre": list(mes_map.values())}),
         use_container_width=True
     )
+
+# Malaria
+if disease=="malaria":
+    st.subheader("📈 Tendencia mensual")
+
+    if "Mes" in malaria_raw.columns:
+        monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
+        monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
+
+        st.plotly_chart(
+            px.line(monthly, x="Mes_nombre", y="TOTAL", markers=True,
+                    category_orders={"Mes_nombre": list(mes_map.values())}),
+            use_container_width=True
+        )
 
 # =========================================
 # 테이블
