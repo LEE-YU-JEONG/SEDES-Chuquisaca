@@ -348,11 +348,6 @@ def load_malaria():
 
     df["TOTAL"] = pd.to_numeric(df["TOTAL"], errors="coerce").fillna(0)
 
-    # 🔥 Mes 생성 (없을 경우 대비)
-    if "Mes" not in df.columns:
-        if "Fecha" in df.columns:
-            df["Mes"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.month
-
     grouped = df.groupby("key").agg({
         "Municipio":"first",
         "TOTAL":"sum"
@@ -413,7 +408,14 @@ geojson["features"] = [f for f in geojson["features"] if f["properties"]["NAME_1
 st.sidebar.header("⚙️ Configuración")
 
 disease = st.sidebar.selectbox("Enfermedad", ["chagas","dengue","malaria"])
+
+sort_option = st.sidebar.selectbox(
+    "Ordenar por",
+    ["Mayor valor", "Menor valor", "Nombre A-Z", "Nombre Z-A"]
+)
+
 search_term = st.sidebar.text_input("🔍 Buscar municipio")
+top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
 show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
 
 # =========================================
@@ -433,13 +435,39 @@ if search_term:
     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
 
 # =========================================
-# HOTSPOT
+# 선택 상태
+# =========================================
+if "selected_municipio" not in st.session_state:
+    st.session_state.selected_municipio = None
+
+if search_term and len(df) > 0:
+    st.session_state.selected_municipio = df.iloc[0]["municipio"]
+
+# =========================================
+# HOTSPOT 계산
 # =========================================
 if len(df) > 0:
     cutoff = df["value"].quantile(0.9)
     df["is_hotspot"] = df["value"] >= cutoff
 else:
     df["is_hotspot"] = False
+
+# =========================================
+# HOTSPOT 배너
+# =========================================
+top3 = df.sort_values("value", ascending=False).head(3)
+
+if len(top3) > 0:
+    text_items = []
+    for _, row in top3.iterrows():
+        val = f"{row['value']:.2%}" if disease=="chagas" else f"{row['value']:.1f}"
+        text_items.append(f"{row['municipio']} ({val})")
+
+    st.markdown(f"""
+    <div style="background-color:#ba2020;padding:15px;border-radius:10px;color:white;font-weight:bold;">
+    ⚠️ Hotspots principales: {" | ".join(text_items)}
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================
 # MAP
@@ -455,6 +483,9 @@ def style(feature):
 
     if row is None:
         return {"fillColor":"gray"}
+
+    if st.session_state.selected_municipio == name:
+        return {"fillColor":"#2b83ba","color":"yellow","weight":4}
 
     if show_hotspot and row.get("is_hotspot", False):
         return {"fillColor":"#6a00ff","weight":3}
@@ -472,10 +503,13 @@ for f in geojson["features"]:
     folium.GeoJson(
         f,
         style_function=style,
-        tooltip=folium.GeoJsonTooltip(fields=["NAME_3"])
+        tooltip=folium.GeoJsonTooltip(fields=["NAME_3"], aliases=[""])
     ).add_to(m)
 
-st_folium(m, width=800, height=500)
+map_data = st_folium(m, width=800, height=500)
+
+if map_data and map_data.get("last_active_drawing"):
+    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
 # 그래프
@@ -484,39 +518,13 @@ st.subheader("📊 Distribución")
 st.plotly_chart(px.bar(df, x="municipio", y="value"), use_container_width=True)
 
 # =========================================
-# 월 이름 (공통)
+# 월별
 # =========================================
 mes_map = {
     1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
     7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
 }
 
-# =========================================
-# MALARIA 월별
-# =========================================
-if disease=="malaria":
-    st.subheader("📈 Tendencia mensual")
-
-    if "Mes" in malaria_raw.columns:
-        monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
-        monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
-
-        st.plotly_chart(
-            px.line(
-                monthly,
-                x="Mes_nombre",
-                y="TOTAL",
-                markers=True,
-                category_orders={"Mes_nombre": list(mes_map.values())}
-            ),
-            use_container_width=True
-        )
-    else:
-        st.warning("⚠️ Malaria dataset에 Mes 컬럼 없음")
-
-# =========================================
-# DENGUE 월별
-# =========================================
 if disease=="dengue":
     st.subheader("📈 Tendencia mensual")
 
