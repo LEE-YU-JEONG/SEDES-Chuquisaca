@@ -252,13 +252,13 @@ with col_legend:
         <div style="
             position: sticky;
             top: 20px;
-            background: white;
+            background: #0e1117;
             padding: 12px;
             border-radius: 10px;
             border: 1px solid #ddd;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
             font-size: 13px;
-            margin-left: -100px;
+            margin-left: -200px;
         ">
 
         <b>🎨 Nivel de Riesgo</b><br><br>
