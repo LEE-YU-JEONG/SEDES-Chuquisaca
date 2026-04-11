@@ -8,13 +8,13 @@ Original file is located at
 """
 
 # from streamlit_folium import st_folium
+# import plotly.express as px
 # import streamlit as st
 # import pandas as pd
 # import unicodedata
 # import folium
 # import json
 # import re
-# import plotly.express as px
 
 # # =========================================
 # # 설정
@@ -147,6 +147,18 @@ Original file is located at
 #     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
 
 # # =========================================
+# # 정렬
+# # =========================================
+# if sort_option == "Mayor valor":
+#     df = df.sort_values("value", ascending=False)
+# elif sort_option == "Menor valor":
+#     df = df.sort_values("value", ascending=True)
+# elif sort_option == "Nombre A-Z":
+#     df = df.sort_values("municipio", ascending=True)
+# elif sort_option == "Nombre Z-A":
+#     df = df.sort_values("municipio", ascending=False)
+
+# # =========================================
 # # 선택 상태
 # # =========================================
 # if "selected_municipio" not in st.session_state:
@@ -156,7 +168,7 @@ Original file is located at
 #     st.session_state.selected_municipio = df.iloc[0]["municipio"]
 
 # # =========================================
-# # HOTSPOT 계산
+# # HOTSPOT
 # # =========================================
 # if len(df) > 0:
 #     cutoff = df["value"].quantile(0.9)
@@ -224,35 +236,29 @@ Original file is located at
 #     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # # =========================================
+# # 선택된 지역 상세 데이터
+# # =========================================
+# if st.session_state.selected_municipio:
+#     st.subheader(f"📍 {st.session_state.selected_municipio}")
+
+#     key = normalize(st.session_state.selected_municipio)
+
+#     if disease == "malaria":
+#         detail = malaria_raw[malaria_raw["key"] == key]
+
+#     elif disease == "dengue":
+#         detail = dengue_raw[dengue_raw["key"] == key]
+
+#     else:
+#         detail = basic_df[basic_df["key"] == key]
+
+#     st.dataframe(detail)
+
+# # =========================================
 # # 그래프
 # # =========================================
 # st.subheader("📊 Distribución")
-# st.plotly_chart(px.bar(df, x="municipio", y="value"), use_container_width=True)
-
-# # =========================================
-# # 월별
-# # =========================================
-# mes_map = {
-#     1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
-#     7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
-# }
-
-# if disease=="dengue":
-#     st.subheader("📈 Tendencia mensual")
-
-#     monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
-#     monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
-
-#     st.plotly_chart(
-#         px.line(
-#             monthly,
-#             x="Mes_nombre",
-#             y="value",
-#             markers=True,
-#             category_orders={"Mes_nombre": list(mes_map.values())}
-#         ),
-#         use_container_width=True
-#     )
+# st.plotly_chart(px.bar(df.head(top_n), x="municipio", y="value"), use_container_width=True)
 
 # # =========================================
 # # 테이블
@@ -261,13 +267,13 @@ Original file is located at
 # st.dataframe(df.drop(columns=["key"], errors="ignore"))
 
 from streamlit_folium import st_folium
+import plotly.express as px
 import streamlit as st
 import pandas as pd
 import unicodedata
 import folium
 import json
 import re
-import plotly.express as px
 
 # =========================================
 # 설정
@@ -392,6 +398,34 @@ elif disease == "dengue":
     df = dengue_df.copy()
 else:
     df = basic_df.copy()
+
+# =========================================
+# KPI (🔥 확장된 부분)
+# =========================================
+if len(df) > 0:
+    total_value = df["value"].sum()
+
+    max_row = df.loc[df["value"].idxmax()]
+    max_name = max_row["municipio"]
+    max_value = max_row["value"]
+
+    top3_mean = df.nlargest(3, "value")["value"].mean()
+
+    cutoff = df["value"].quantile(0.9)
+    hotspot_ratio = (df["value"] >= cutoff).sum() / len(df)
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    if disease == "chagas":
+        col1.metric("Total Cobertura", f"{total_value:.2%}")
+        col2.metric("Máximo", f"{max_name}", f"{max_value:.2%}")
+        col3.metric("Top 3 Promedio", f"{top3_mean:.2%}")
+        col4.metric("Hotspot Ratio", f"{hotspot_ratio:.0%}")
+    else:
+        col1.metric("Total Casos", f"{total_value:,.0f}")
+        col2.metric("Máximo", f"{max_name}", f"{max_value:.1f}")
+        col3.metric("Top 3 Promedio", f"{top3_mean:.1f}")
+        col4.metric("Hotspot Ratio", f"{hotspot_ratio:.0%}")
 
 # =========================================
 # 검색
