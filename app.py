@@ -273,6 +273,15 @@ def normalize(text):
     return text.upper()
 
 # =========================================
+# 🔥 안전 변환 함수
+# =========================================
+def safe_int(x):
+    return int(x) if pd.notna(x) else 0
+
+def safe_float(x):
+    return float(x) if pd.notna(x) else 0.0
+
+# =========================================
 # 3. 데이터 로드
 # =========================================
 @st.cache_data
@@ -369,7 +378,7 @@ col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("Promedio", f"{df['value'].mean():.2%}")
 col2.metric("Máximo", df.loc[df["value"].idxmax(), "municipio"])
-col3.metric("Hotspots", df["is_hotspot"].sum())
+col3.metric("Hotspots", int(df["is_hotspot"].sum()))
 col4.metric("Total municipios", len(df))
 
 # =========================================
@@ -388,10 +397,10 @@ def style(feature):
     if row is None:
         return {"fillColor": "gray"}
 
-    if row["is_hotspot"]:
+    if row.get("is_hotspot", False):
         return {"fillColor": "#6a00ff", "weight": 3}
 
-    val = row["value_norm"] if disease == "malaria" else row["value"]
+    val = safe_float(row.get("value_norm")) if disease == "malaria" else safe_float(row.get("value"))
 
     if val < 0.2:
         color = "#1a9850"
@@ -411,24 +420,24 @@ with col_map:
 
         if row is not None:
 
-            hotspot_text = "🔥 HOTSPOT<br>" if row["is_hotspot"] else ""
+            hotspot_text = "🔥 HOTSPOT<br>" if row.get("is_hotspot", False) else ""
 
             if disease == "malaria":
                 popup_html = f"""
                 <b>{name}</b><br>
                 {hotspot_text}
-                Total: {int(row['TOTAL'])}<br>
-                PR Total: {int(row['PR_TOTAL'])}<br>
-                Negativos: {int(row['NEGATIVA_TOTAL_TOTAL'])}<br>
-                Intensidad: {row['value_norm']:.2%}
+                Total: {safe_int(row.get('TOTAL'))}<br>
+                PR Total: {safe_int(row.get('PR_TOTAL'))}<br>
+                Negativos: {safe_int(row.get('NEGATIVA_TOTAL_TOTAL'))}<br>
+                Intensidad: {safe_float(row.get('value_norm')):.2%}
                 """
             else:
                 popup_html = f"""
                 <b>{name}</b><br>
                 {hotspot_text}
-                Cobertura: {row['value']:.2%}<br>
-                Casas rociadas: {int(row['viv_roc'])}<br>
-                Total viviendas: {int(row['viv_exist'])}
+                Cobertura: {safe_float(row.get('value')):.2%}<br>
+                Casas rociadas: {safe_int(row.get('viv_roc'))}<br>
+                Total viviendas: {safe_int(row.get('viv_exist'))}
                 """
 
         else:
@@ -449,7 +458,7 @@ with col_info:
     max_row = df.loc[df["value"].idxmax()]
 
     st.write(f"🔴 Mayor riesgo: **{max_row['municipio']}**")
-    st.write(f"🔥 Hotspots: {df['is_hotspot'].sum()}")
+    st.write(f"🔥 Hotspots: {int(df['is_hotspot'].sum())}")
     st.write(f"📊 Promedio: {df['value'].mean():.2%}")
 
 # =========================================
@@ -470,7 +479,6 @@ st.pyplot(fig)
 # =========================================
 st.subheader("📋 Datos detallados")
 
-# 🔥 malaria일 때 key 제거
 if disease == "malaria":
     st.dataframe(df.drop(columns=["key"]).sort_values("value", ascending=False))
 else:
