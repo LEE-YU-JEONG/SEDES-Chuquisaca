@@ -305,7 +305,7 @@ import re
 import plotly.express as px
 
 # =========================================
-# 0. 설정
+# 설정
 # =========================================
 st.set_page_config(layout="wide")
 st.title("🦠 Informe Epidemiológico - Chuquisaca")
@@ -470,30 +470,6 @@ if len(top3) > 0:
     """, unsafe_allow_html=True)
 
 # =========================================
-# 정렬
-# =========================================
-if sort_option == "Mayor valor":
-    df_sorted = df.sort_values("value", ascending=False)
-elif sort_option == "Menor valor":
-    df_sorted = df.sort_values("value", ascending=True)
-elif sort_option == "Nombre A-Z":
-    df_sorted = df.sort_values("municipio")
-else:
-    df_sorted = df.sort_values("municipio", ascending=False)
-
-df_filtered = df_sorted.head(top_n)
-
-# =========================================
-# KPI
-# =========================================
-st.subheader("📊 Resumen general")
-
-col1, col2, col3 = st.columns(3)
-col1.metric("Promedio", f"{df['value'].mean():.2f}")
-col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"] if len(df)>0 else "-")
-col3.metric("Total", len(df))
-
-# =========================================
 # MAP
 # =========================================
 def get_row(name):
@@ -508,15 +484,12 @@ def style(feature):
     if row is None:
         return {"fillColor":"gray"}
 
-    # 1순위: 선택된 지역
     if st.session_state.selected_municipio == name:
         return {"fillColor":"#2b83ba","color":"yellow","weight":4}
 
-    # 2순위: hotspot
     if show_hotspot and row.get("is_hotspot", False):
         return {"fillColor":"#6a00ff","weight":3}
 
-    # 3순위: 일반 색상
     val = safe_float(row.get("value"))
     color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
 
@@ -530,10 +503,7 @@ for f in geojson["features"]:
     folium.GeoJson(
         f,
         style_function=style,
-        tooltip=folium.GeoJsonTooltip(
-            fields=["NAME_3"],
-            aliases=["Municipio:"]
-        )
+        tooltip=folium.GeoJsonTooltip(aliases=["Municipio:"])
     ).add_to(m)
 
 map_data = st_folium(m, width=800, height=500)
@@ -542,53 +512,38 @@ if map_data and map_data.get("last_active_drawing"):
     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
-# DETALLE
-# =========================================
-if st.session_state.selected_municipio:
-    st.subheader(f"📍 {st.session_state.selected_municipio}")
-
-    if disease == "malaria":
-        st.dataframe(
-            malaria_raw[
-                malaria_raw["key"] == normalize(st.session_state.selected_municipio)
-            ].drop(columns=["key"], errors="ignore")
-        )
-
-    elif disease == "dengue":
-        st.dataframe(
-            dengue_raw[
-                dengue_raw["key"] == normalize(st.session_state.selected_municipio)
-            ].drop(columns=["key"], errors="ignore")
-        )
-
-    else:
-        r = get_row(st.session_state.selected_municipio)
-        if r is not None:
-            st.json(r.to_dict())
-
-# =========================================
 # 그래프
 # =========================================
 st.subheader("📊 Distribución")
-
-fig = px.bar(df_filtered, x="municipio", y="value")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(px.bar(df, x="municipio", y="value"), use_container_width=True)
 
 # =========================================
 # 월별
 # =========================================
-if disease=="malaria":
-    st.subheader("📈 Tendencia mensual")
-    monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
-    st.plotly_chart(px.line(monthly, x="Mes", y="TOTAL", markers=True), use_container_width=True)
+mes_map = {
+    1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
+    7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
+}
 
 if disease=="dengue":
     st.subheader("📈 Tendencia mensual")
+
     monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
-    st.plotly_chart(px.line(monthly, x="Mes", y="value", markers=True), use_container_width=True)
+    monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
+
+    st.plotly_chart(
+        px.line(
+            monthly,
+            x="Mes_nombre",
+            y="value",
+            markers=True,
+            category_orders={"Mes_nombre": list(mes_map.values())}
+        ),
+        use_container_width=True
+    )
 
 # =========================================
 # 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
-st.dataframe(df_filtered.drop(columns=["key"], errors="ignore"))
+st.dataframe(df.drop(columns=["key"], errors="ignore"))
