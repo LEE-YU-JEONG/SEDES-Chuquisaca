@@ -245,7 +245,7 @@ Original file is located at
 #     st.dataframe(df.sort_values("value", ascending=False))
 
 from streamlit_folium import st_folium
-import plotly.express as px
+import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
 import unicodedata
@@ -270,7 +270,7 @@ def normalize(text):
     return text.upper()
 
 # =========================================
-# 안전 함수
+# 안전 변환
 # =========================================
 def safe_int(x):
     return int(x) if pd.notna(x) else 0
@@ -279,12 +279,16 @@ def safe_float(x):
     return float(x) if pd.notna(x) else 0.0
 
 # =========================================
-# 데이터 로드
+# 3. 데이터 로드
 # =========================================
 @st.cache_data
 def load_basic():
-    df = pd.read_excel("Rociado Chuquisaca 2025.xlsx",
-                       sheet_name="RESUMEN_2", skiprows=8, nrows=31)
+    df = pd.read_excel(
+        "Rociado Chuquisaca 2025.xlsx",
+        sheet_name="RESUMEN_2",
+        skiprows=8,
+        nrows=31
+    )
 
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
@@ -307,8 +311,10 @@ def load_basic():
 
 @st.cache_data
 def load_malaria():
-    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx",
-                       "Base de Datos Negativos")
+    df = pd.read_excel(
+        "Datos Estadisticos Malaria 2025.xlsx",
+        "Base de Datos Negativos"
+    )
 
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
@@ -334,7 +340,7 @@ basic_df = load_basic()
 malaria_df = load_malaria()
 
 # =========================================
-# GeoJSON
+# 4. GeoJSON
 # =========================================
 with open("gadm41_BOL_3.json") as f:
     geojson = json.load(f)
@@ -345,20 +351,13 @@ geojson["features"] = [
 ]
 
 # =========================================
-# UI
+# 5. Sidebar
 # =========================================
-st.sidebar.title("⚙️ Configuración")
-
 disease = st.sidebar.selectbox(
     "Enfermedad", ["chagas", "dengue", "malaria"]
 )
 
 show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
-
-sort_option = st.sidebar.selectbox(
-    "Orden gráfico",
-    ["Mayor a menor", "Menor a mayor"]
-)
 
 # 데이터 선택
 df = malaria_df.copy() if disease == "malaria" else basic_df.copy()
@@ -367,13 +366,19 @@ if disease != "malaria":
     df["value"] = df["coverage"]
 
 # =========================================
-# HOTSPOT
+# 6. HOTSPOT
 # =========================================
 cutoff = df["value"].quantile(0.9)
 df["is_hotspot"] = df["value"] >= cutoff
 
 # =========================================
-# KPI
+# 7. 선택 상태 (핵심)
+# =========================================
+if "selected_municipio" not in st.session_state:
+    st.session_state.selected_municipio = None
+
+# =========================================
+# 8. KPI
 # =========================================
 col1, col2, col3, col4 = st.columns(4)
 
@@ -383,7 +388,7 @@ col3.metric("Hotspots", int(df["is_hotspot"].sum()))
 col4.metric("Total municipios", len(df))
 
 # =========================================
-# MAP
+# 9. MAP
 # =========================================
 def get_row(name):
     key = normalize(name)
@@ -391,7 +396,8 @@ def get_row(name):
     return r.iloc[0] if len(r) else None
 
 def style(feature):
-    row = get_row(feature["properties"]["NAME_3"])
+    name = feature["properties"]["NAME_3"]
+    row = get_row(name)
 
     if row is None:
         return {"fillColor": "gray"}
@@ -408,6 +414,10 @@ def style(feature):
     else:
         color = "#d73027"
 
+    # 선택 강조
+    if st.session_state.selected_municipio == name:
+        return {"fillColor": "#2b83ba", "weight": 4, "color": "yellow"}
+
     return {"fillColor": color, "fillOpacity": 0.7}
 
 st.subheader("🗺️ Mapa")
@@ -419,40 +429,77 @@ for f in geojson["features"]:
     row = get_row(name)
 
     if row is not None:
-        popup_html = f"<b>{name}</b><br>Valor: {safe_float(row.get('value')):.2f}"
+
+        hotspot_text = "🔥 HOTSPOT<br>" if row.get("is_hotspot", False) else ""
+
+        if disease == "malaria":
+            popup_html = f"""
+            <b>{name}</b><br>
+            {hotspot_text}
+            Total: {safe_int(row.get('TOTAL'))}<br>
+            PR Total: {safe_int(row.get('PR_TOTAL'))}<br>
+            Negativos: {safe_int(row.get('NEGATIVA_TOTAL_TOTAL'))}<br>
+            Intensidad: {safe_float(row.get('value_norm')):.2%}
+            """
+        else:
+            popup_html = f"""
+            <b>{name}</b><br>
+            {hotspot_text}
+            Cobertura: {safe_float(row.get('value')):.2%}<br>
+            Casas rociadas: {safe_int(row.get('viv_roc'))}<br>
+            Total viviendas: {safe_int(row.get('viv_exist'))}
+            """
+
     else:
         popup_html = f"<b>{name}</b><br>Sin datos"
 
     folium.GeoJson(
         f,
         style_function=style,
-        popup=folium.Popup(popup_html),
+        popup=folium.Popup(popup_html, max_width=300),
         tooltip=name
     ).add_to(m)
 
-st_folium(m, width=900, height=500)
+map_data = st_folium(m, width=700, height=500)
 
 # =========================================
-# 📊 인터랙티브 그래프 (핵심 개선)
+# 🔥 클릭 이벤트 핵심
 # =========================================
-st.subheader("📊 Distribución interactiva")
-
-df_sorted = df.sort_values("value", ascending=(sort_option=="Menor a mayor"))
-
-fig = px.bar(
-    df_sorted,
-    x="municipio",
-    y="value",
-    title="Distribución por municipio",
-    hover_data=["value"],
-)
-
-fig.update_layout(xaxis_tickangle=-45)
-
-st.plotly_chart(fig, use_container_width=True)
+if map_data and map_data.get("last_active_drawing"):
+    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
-# 📋 테이블
+# 10. 선택된 지역 상세
+# =========================================
+if st.session_state.selected_municipio:
+    st.subheader(f"📍 Detalle: {st.session_state.selected_municipio}")
+
+    selected_row = get_row(st.session_state.selected_municipio)
+
+    if selected_row is not None:
+        if disease == "malaria":
+            st.write(f"Total: {safe_int(selected_row['TOTAL'])}")
+            st.write(f"PR Total: {safe_int(selected_row['PR_TOTAL'])}")
+            st.write(f"Negativos: {safe_int(selected_row['NEGATIVA_TOTAL_TOTAL'])}")
+            st.write(f"Intensidad: {safe_float(selected_row['value_norm']):.2%}")
+        else:
+            st.write(f"Cobertura: {safe_float(selected_row['value']):.2%}")
+            st.write(f"Casas rociadas: {safe_int(selected_row['viv_roc'])}")
+            st.write(f"Total viviendas: {safe_int(selected_row['viv_exist'])}")
+
+# =========================================
+# 11. 그래프 (전체)
+# =========================================
+st.subheader("📊 Distribución completa")
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.bar(df["municipio"], df["value"])
+ax.tick_params(axis='x', rotation=60)
+
+st.pyplot(fig)
+
+# =========================================
+# 12. 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
 
