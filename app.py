@@ -503,7 +503,7 @@ for f in geojson["features"]:
     folium.GeoJson(
         f,
         style_function=style,
-        tooltip=folium.GeoJsonTooltip(aliases=["Municipio:"])
+        tooltip=folium.GeoJsonTooltip(fields=["NAME_3"])
     ).add_to(m)
 
 map_data = st_folium(m, width=800, height=500)
