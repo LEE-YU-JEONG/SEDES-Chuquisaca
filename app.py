@@ -33,7 +33,7 @@ def normalize(text):
     return text.upper()
 
 # =========================================
-# 3. 기본 데이터 (Chagas / Dengue)
+# 3. 기본 데이터
 # =========================================
 @st.cache_data
 def load_basic_dataset():
@@ -76,16 +76,22 @@ def load_malaria_dataset():
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
 
+    # 숫자형 강제 변환
+    for col in ["TOTAL", "PR_TOTAL", "NEGATIVA_TOTAL_TOTAL"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
     grouped = df.groupby("key").agg({
         "Municipio": "first",
+        "TOTAL": "sum",
         "PR_TOTAL": "sum",
         "NEGATIVA_TOTAL_TOTAL": "sum"
     }).reset_index()
 
-    # malaria 전용 지표
-    grouped["value"] = grouped["PR_TOTAL"] / (
-        grouped["PR_TOTAL"] + grouped["NEGATIVA_TOTAL_TOTAL"] + 1
-    )
+    # value 변경
+    grouped["value"] = grouped["TOTAL"]
+    # 정규화 (지도용)
+    grouped["value_norm"] = grouped["value"] / grouped["value"].max()
 
     return grouped.rename(columns={"Municipio": "municipio"})
 
@@ -112,9 +118,9 @@ disease = st.sidebar.radio(
     ["chagas", "dengue", "malaria"]
 )
 
-threshold = st.sidebar.slider("Criterio riesgo", 0.0, 1.0, 0.2)
+threshold = st.sidebar.slider("⚠️ Criterio riesgo", 0.0, 1.0, 0.2)
 
-# 핵심 분기
+# 분기
 if disease == "malaria":
     df = malaria_df
 else:
@@ -126,22 +132,7 @@ else:
         df["value"] = df["coverage"] * 0.8
 
 # =========================================
-# 7. 선택 상태
-# =========================================
-if "selected_municipio" not in st.session_state:
-    st.session_state.selected_municipio = None
-
-# =========================================
-# 8. KPI
-# =========================================
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Promedio", f"{df['value'].mean():.2%}")
-col2.metric("Total registros", int(df["value"].count()))
-col3.metric("Zonas riesgo", int((df["value"] < threshold).sum()))
-
-# =========================================
-# 9. 매칭
+# 7. 매칭
 # =========================================
 def get_row(name):
     key = normalize(name)
@@ -149,7 +140,7 @@ def get_row(name):
     return row.iloc[0] if len(row) > 0 else None
 
 # =========================================
-# 10. 스타일
+# 8. 스타일
 # =========================================
 def style_function(feature):
     name = feature["properties"]["NAME_3"]
@@ -158,7 +149,10 @@ def style_function(feature):
     if row is None:
         return {"fillColor": "gray", "color": "black", "weight": 1}
 
-    value = row["value"]
+    if disease == "malaria":
+        value = row["value_norm"]
+    else:
+        value = row["value"]
 
     if value < threshold:
         color = "#1a9850"
@@ -166,15 +160,6 @@ def style_function(feature):
         color = "#fee08b"
     else:
         color = "#d73027"
-
-    # 클릭 강조
-    if st.session_state.selected_municipio == name:
-        return {
-            "fillColor": "#2b83ba",
-            "color": "yellow",
-            "weight": 4,
-            "fillOpacity": 0.9
-        }
 
     return {
         "fillColor": color,
@@ -184,7 +169,7 @@ def style_function(feature):
     }
 
 # =========================================
-# 11. 지도
+# 9. 지도 + popup 강화
 # =========================================
 m = folium.Map(location=[-19, -65], zoom_start=8)
 
@@ -193,28 +178,37 @@ for feature in geojson_data["features"]:
     row = get_row(name)
 
     if row is not None:
-        popup_html = f"""
-        <b>{name}</b><br>
-        Value: {row['value']:.2%}
-        """
+
+        if disease == "malaria":
+            popup_html = f"""
+            <b>{name}</b><br>
+            🧪 Total pruebas: {int(row['TOTAL'])}<br>
+            ⚡ PR Total: {int(row['PR_TOTAL'])}<br>
+            ❌ Negativos: {int(row['NEGATIVA_TOTAL_TOTAL'])}<br>
+            📊 Intensidad: {row['value_norm']:.2%}
+            """
+        else:
+            popup_html = f"""
+            <b>{name}</b><br>
+            Cobertura: {row['value']:.2%}<br>
+            Casas rociadas: {int(row['viv_roc'])}<br>
+            Total viviendas: {int(row['viv_exist'])}
+            """
+
     else:
         popup_html = f"<b>{name}</b><br>Sin datos"
 
     folium.GeoJson(
         feature,
         style_function=style_function,
-        popup=folium.Popup(popup_html),
+        popup=folium.Popup(popup_html, max_width=300),
         tooltip=name
     ).add_to(m)
 
-map_data = st_folium(m, width=900, height=500)
-
-# 클릭 처리
-if map_data and map_data.get("last_active_drawing"):
-    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
+st_folium(m, width=900, height=500)
 
 # =========================================
-# 12. 그래프
+# 10. 그래프
 # =========================================
 st.subheader("TOP 5")
 
