@@ -204,41 +204,50 @@ with col_map:
     map_data = st_folium(m, width=800, height=500)
 
 with col_legend:
-    # position: sticky 대신 relative 사용 및 min-width 보정
     st.markdown(
-        """
+        f"""
         <div style="
             background-color: #1e1e1e;
             color: #ffffff;
-            padding: 15px;
+            padding: 20px;
             border-radius: 12px;
             border: 1px solid #333;
             box-shadow: 2px 2px 10px rgba(0,0,0,0.35);
-            font-size: 15px;
-            min-width: 300px;
-            z-index: 1000;
+
+            /* 핵심 수정 사항 */
+            height: 500px;         /* 지도의 height=500과 동일하게 설정 */
+            width: 100%;           /* 컬럼 가로 너비에 꽉 차게 */
+            display: flex;         /* 내부 정렬을 위해 flex 사용 */
+            flex-direction: column;
+            box-sizing: border-box; /* 패딩이 높이에 영향을 주지 않도록 설정 */
         ">
             <div style="
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: 900;
                 color: #4fc3f7;
                 margin-bottom: 10px;
                 display: flex;
                 align-items: center;
-                gap: 5px;
+                gap: 8px;
             ">
                 ⚠️ Nivel de Riesgo
             </div>
-            <hr style="margin: 10px 0; border: 0.5px solid #444;">
-            <div style="line-height: 1.8;">
+
+            <hr style="margin: 5px 0 15px 0; border: 0.5px solid #444;">
+
+            <div style="line-height: 2.2; font-size: 15px;">
                 <span style="color: #1a9850;">●</span> <b>Bajo</b> (&lt;5)<br>
                 <span style="color: #fee08b;">●</span> <b>Medio</b> (5–15)<br>
                 <span style="color: #b30000;">●</span> <b>Alto</b> (&gt;15)<br>
-                <br>
+
+                <div style="margin: 15px 0; border-top: 1px dashed #444;"></div>
+
                 <span style="color: #8e7cc3;">●</span> <b>Hotspot</b><br>
                 <span style="color: #4fc3f7;">●</span> <b>Seleccionado</b><br>
                 <span style="color: gray;">●</span> <b>Sin datos</b>
             </div>
+
+            <div style="flex-grow: 1;"></div>
         </div>
         """,
         unsafe_allow_html=True
