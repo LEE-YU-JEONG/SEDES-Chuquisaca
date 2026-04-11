@@ -206,18 +206,34 @@ def style(feature):
     row = get_row(name)
 
     if row is None:
-        return {"fillColor":"gray"}
+        return {"fillColor":"gray", "fillOpacity": 0.5}
 
+    # SELECTED
     if st.session_state.selected_municipio == name:
-        return {"fillColor":"#041c4c","color":"yellow","weight":4}
+        return {
+            "fillColor": "#041c4c",
+            "fillOpacity": 1.0,
+            "color": "#00d4ff",
+            "weight": 6,
+            "dashArray": "0"
+        }
 
+    # HOTSPOT
     if show_hotspot and row.get("is_hotspot", False):
-        return {"fillColor":"#6a00ff","weight":3}
+        return {
+            "fillColor": "#6a00ff",
+            "fillOpacity": 0.85,
+            "weight": 3
+        }
 
+    # NORMAL COLOR SCALE
     val = safe_float(row.get("value"))
-    color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
+    color = "#1a9850" if val < 5 else "#fee08b" if val < 15 else "#d73027"
 
-    return {"fillColor":color,"fillOpacity":0.7}
+    return {
+        "fillColor": color,
+        "fillOpacity": 0.75
+    }
 
 # =========================================
 # 13. MAP + FLOATING LEGEND
