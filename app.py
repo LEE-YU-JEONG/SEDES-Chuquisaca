@@ -7,194 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1n_mNxc74hx_rnIxdFxfltWiSNkzwotJi
 """
 
-# from streamlit_folium import st_folium
-# import matplotlib.pyplot as plt
-# import streamlit as st
-# import pandas as pd
-# import unicodedata
-# import folium
-# import json
-# import re
-
-# # =========================================
-# # 1. 페이지 설정
-# # =========================================
-# st.set_page_config(layout="wide")
-# st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
-
-# # =========================================
-# #  2. normalize 함수 (핵심)
-# # =========================================
-# def normalize(text):
-#     text = str(text).strip()
-#     text = unicodedata.normalize('NFKD', text)
-#     text = text.encode('ascii', 'ignore').decode('utf-8')
-#     text = re.sub(r'[^a-zA-Z0-9]', '', text)
-#     return text.upper()
-
-# # =========================================
-# # 3. 데이터 로드
-# # =========================================
-# @st.cache_data
-# def load_data():
-
-#     df = pd.read_excel(
-#         "Rociado Chuquisaca 2025.xlsx",
-#         sheet_name="RESUMEN_2",
-#         skiprows=8,
-#         nrows=31
-#     )
-
-#     df.columns = df.columns.str.replace("\n", " ")
-#     df.columns = df.columns.str.strip()
-
-#     df = df.rename(columns={
-#         "MUNICIPIO": "municipio",
-#         "EXIST": "viv_exist",
-#         "ROC": "viv_roc"
-#     })
-
-#     df = df[df["municipio"].notna()]
-#     df = df[~df["municipio"].str.contains("TOTAL", na=False)]
-
-#     # 공백 제거
-#     df["municipio"] = df["municipio"].str.strip()
-
-#     # key 생성
-#     df["key"] = df["municipio"].apply(normalize)
-
-#     # 결측 처리
-#     df["viv_roc"] = df["viv_roc"].fillna(0)
-#     df["viv_exist"] = df["viv_exist"].fillna(1)
-
-#     df["coverage"] = df["viv_roc"] / df["viv_exist"]
-
-#     df["chagas"] = df["coverage"]
-#     df["dengue"] = df["coverage"] * 0.8
-#     df["malaria"] = df["coverage"] * 0.5
-
-#     # GeoJSON
-#     with open("gadm41_BOL_3.json") as f:
-#         geojson_data = json.load(f)
-
-#     geojson_data["features"] = [
-#         f for f in geojson_data["features"]
-#         if f["properties"].get("NAME_1") == "Chuquisaca"
-#     ]
-
-#     return df, geojson_data
-
-# df, geojson_data = load_data()
-
-# # =========================================
-# # 4. 사이드바
-# # =========================================
-# disease = st.sidebar.radio(
-#     "Seleccionar enfermedad",
-#     ["chagas", "dengue", "malaria"]
-# )
-# threshold = st.sidebar.slider("Criterio riesgo", 0.0, 1.0, 0.2)
-
-# # =========================================
-# # 5. KPI
-# # =========================================
-# col1, col2, col3 = st.columns(3)
-
-# col1.metric("Cobertura promedio", f"{df[disease].mean():.2%}")
-# col2.metric("Total rociado", int(df["viv_roc"].sum()))
-# col3.metric("Zonas riesgo", int((df[disease] < threshold).sum()))
-
-# # =========================================
-# # 6. 자동 매칭 함수
-# # =========================================
-# def get_row(name):
-
-#     key = normalize(name)
-#     row = df[df["key"] == key]
-
-#     if len(row) > 0:
-#         return row.iloc[0]
-
-#     return None
-
-# # =========================================
-# # 7. 스타일
-# # =========================================
-# def style_function(feature):
-
-#     name = feature["properties"]["NAME_3"]
-#     row = get_row(name)
-
-#     if row is None:
-#         return {"fillColor": "gray", "color": "black", "weight": 1}
-
-#     value = row[disease]
-
-#     if value < threshold:
-#         color = "#d73027"
-#     elif value < 0.3:
-#         color = "#fee08b"
-#     else:
-#         color = "#1a9850"
-
-#     return {
-#         "fillColor": color,
-#         "color": "black",
-#         "weight": 1,
-#         "fillOpacity": 0.7
-#     }
-
-# # =========================================
-# # 8. 지도
-# # =========================================
-# st.subheader("🗺️ Mapa Chuquisaca")
-
-# m = folium.Map(location=[-19, -65], zoom_start=8)
-
-# for feature in geojson_data["features"]:
-
-#     name = feature["properties"]["NAME_3"]
-#     row = get_row(name)
-
-#     if row is not None:
-#         popup_html = f"""
-#         <b>{name}</b><br>
-#         Cobertura: {row[disease]:.2%}<br>
-#         Casas rociadas: {int(row['viv_roc'])}<br>
-#         Total viviendas: {int(row['viv_exist'])}
-#         """
-#     else:
-#         popup_html = f"<b>{name}</b><br>Sin datos"
-
-#     folium.GeoJson(
-#         feature,
-#         style_function=style_function,
-#         popup=folium.Popup(popup_html, max_width=250),
-#         tooltip=name
-#     ).add_to(m)
-
-# st_folium(m, width=900, height=500)
-
-# # =========================================
-# # 9. TOP5 그래프
-# # =========================================
-# st.subheader("📊 TOP 5")
-
-# top_df = df.nlargest(5, disease)
-
-# fig, ax = plt.subplots(figsize=(6, 3))
-
-# bars = ax.bar(range(len(top_df)), top_df[disease])
-
-# for i, v in enumerate(top_df[disease]):
-#     ax.text(i, v + 0.01, f"{v:.2f}", ha='center', fontsize=8)
-
-# ax.set_xticks(range(len(top_df)))
-# ax.set_xticklabels(top_df["municipio"], rotation=30, ha='right')
-
-# plt.tight_layout()
-# st.pyplot(fig)
-
 from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import streamlit as st
@@ -208,7 +20,7 @@ import re
 # 1. 페이지 설정
 # =========================================
 st.set_page_config(layout="wide")
-st.title("🦠 Chuquisaca Disease Dashboard")
+st.title("🦠 Datos de enfermedades del Departamento (Chuquisaca)")
 
 # =========================================
 # 2. normalize
@@ -259,7 +71,7 @@ def load_basic_dataset():
 # =========================================
 @st.cache_data
 def load_malaria_dataset():
-    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx")
+    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx", "Base de Datos Negativos")
 
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
@@ -296,7 +108,7 @@ geojson_data["features"] = [
 # 6. UI
 # =========================================
 disease = st.sidebar.radio(
-    "Seleccionar enfermedad",
+    "⚙️ Seleccionar enfermedad",
     ["chagas", "dengue", "malaria"]
 )
 
