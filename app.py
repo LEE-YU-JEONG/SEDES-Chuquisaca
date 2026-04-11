@@ -217,7 +217,7 @@ with col_legend:
             font-size: 14px;
             min-width: 150px;
             z-index: 1000;
-            margin-left: -100px;
+            margin-left: -200px;
         ">
             <div style="
                 font-size: 18px;
