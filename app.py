@@ -50,6 +50,44 @@ def load_basic():
     df["value"] = df["viv_roc"].fillna(0) / df["viv_exist"].fillna(1)
     return df
 
+## DENGUE
+@st.cache_data
+def load_dengue():
+    df = pd.read_excel(
+        "BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx",
+        "Consolidado",
+        header=0
+    )
+
+    # 🔥 컬럼명 정리 (핵심)
+    df.columns = df.columns.str.replace("\n", " ").str.strip()
+
+    # 🔥 TOTAL 행 제거
+    df = df[~df["Municipio"].astype(str).str.contains("Total", na=False)]
+
+    # 🔥 컬럼 매핑
+    df["municipio"] = df["Municipio"].astype(str).str.strip()
+    df["key"] = df["municipio"].apply(normalize)
+
+    df["value"] = pd.to_numeric(
+        df["INDICADORES ENTOMOLOGICOS_Indice de Viviendas"],
+        errors="coerce"
+    ).fillna(0)
+
+    df["Mes"] = pd.to_datetime(
+        df["FECHA EJECUCION_Inicio"],
+        errors="coerce"
+    ).dt.month
+
+    grouped = df.groupby("key").agg({
+        "municipio":"first",
+        "value":"mean"
+    }).reset_index()
+
+    grouped["value_norm"] = grouped["value"] / grouped["value"].max()
+
+    return grouped, df
+
 ## MALARIA
 @st.cache_data
 def load_malaria():
@@ -68,33 +106,6 @@ def load_malaria():
     grouped["value_norm"] = grouped["value"] / grouped["value"].max()
 
     return grouped.rename(columns={"Municipio":"municipio"}), df
-
-## DENGUE
-@st.cache_data
-def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado", header=0)
-
-    df.columns = range(len(df.columns))
-
-    municipio_col = 0
-    fecha_col = 2
-    iv_col = 8
-
-    df = df[~df[municipio_col].astype(str).str.contains("Total", na=False)]
-
-    df["municipio"] = df[municipio_col].astype(str).str.strip()
-    df["key"] = df["municipio"].apply(normalize)
-    df["value"] = pd.to_numeric(df[iv_col], errors="coerce").fillna(0)
-    df["Mes"] = pd.to_datetime(df[fecha_col], errors="coerce").dt.month
-
-    grouped = df.groupby("key").agg({
-        "municipio":"first",
-        "value":"mean"
-    }).reset_index()
-
-    grouped["value_norm"] = grouped["value"] / grouped["value"].max()
-
-    return grouped, df
 
 # =========================================
 # 3. Load
@@ -209,12 +220,12 @@ if len(df) > 0:
 
     if disease == "chagas":
         col1.metric("Total Cobertura", f"{total_value:.2%}")
-        col2.metric("Máximo", f"{max_value:.2%}", f"{max_name}")
+        col2.metric("Máximo", f"{max_name}", f"{max_value:.2%}")
         col3.metric("Top 3 Promedio", f"{top3_mean:.2%}")
         col4.metric("Hotspot Ratio", f"{hotspot_ratio:.0%}")
     else:
         col1.metric("Total Casos", f"{total_value:,.0f}")
-        col2.metric("Máximo", f"{max_value:.1f}", f"{max_name}")
+        col2.metric("Máximo", f"{max_name}", f"{max_value:.1f}")
         col3.metric("Top 3 Promedio", f"{top3_mean:.1f}")
         col4.metric("Hotspot Ratio", f"{hotspot_ratio:.0%}")
 
