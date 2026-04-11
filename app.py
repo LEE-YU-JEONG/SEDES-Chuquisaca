@@ -350,7 +350,7 @@ def load_dengue():
 ## MALARIA
 @st.cache_data
 def load_malaria():
-    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx","Base de Datos Negativos")
+    df = pd.read_excel("Data/Datos Estadisticos Malaria 2025.xlsx","Base de Datos Negativos")
 
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
