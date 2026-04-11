@@ -210,18 +210,23 @@ with col_legend:
         <div style="
             background-color: #1e1e1e;
             color: #ffffff;
-            padding: 25px;
+            padding: 20px;
             border-radius: 12px;
             border: 1px solid #333;
             box-shadow: 2px 2px 10px rgba(0,0,0,0.35);
 
-            width: 110%;
-            margin-left: -100px;
+            /* --- 이 부분이 핵심 수정 포인트입니다 --- */
+            width: 140%;           /* 가로 폭을 충분히 확보 */
+            margin-left: -80px;    /* 왼쪽으로 당기는 값을 살짝 줄임 (-100 -> -80) */
+            height: 500px;         /* 지도 높이와 일치 */
+            /* ----------------------------------- */
 
             font-size: 15px;
-            min-width: 300px;
             position: relative;
             z-index: 10;
+            box-sizing: border-box; /* 패딩이 박스 크기에 영향을 주지 않도록 함 */
+            display: flex;
+            flex-direction: column;
         ">
             <div style="
                 font-size: 20px;
@@ -280,15 +285,33 @@ st.plotly_chart(px.bar(df.head(top_n), x="municipio", y="value"), use_container_
 if disease == "dengue":
     st.subheader("📈 Tendencia Mensual")
     trend_df = dengue_raw.copy()
+
     if st.session_state.selected_municipio:
         key = normalize(st.session_state.selected_municipio)
         trend_df = trend_df[trend_df["key"] == key]
+        st.caption(f"📍 {st.session_state.selected_municipio}")
+    else:
+        st.caption("🌐 Total")
+
     trend_df = trend_df.dropna(subset=["Mes"])
     monthly = trend_df.groupby("Mes")["value"].mean().reset_index().sort_values("Mes")
+
     if len(monthly) > 0:
+        # 그래프 생성 (x축은 숫자인 Mes 사용)
+        fig = px.line(monthly, x="Mes", y="value", markers=True)
+
+        # X축 표시 설정: 숫자를 월 이름으로 매핑
         month_map = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"}
-        monthly["Mes_nombre"] = monthly["Mes"].map(month_map)
-        st.plotly_chart(px.line(monthly, x="Mes", y="value", markers=True), use_container_width=True)
+
+        fig.update_layout(
+            xaxis=dict(
+                tickmode='array',
+                tickvals=list(month_map.keys()),
+                ticktext=list(month_map.values())
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
 
 # =========================================
 # 16. Table
