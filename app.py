@@ -277,8 +277,12 @@ def normalize(text):
 # =========================================
 @st.cache_data
 def load_basic():
-    df = pd.read_excel("Rociado Chuquisaca 2025.xlsx",
-                       sheet_name="RESUMEN_2", skiprows=8, nrows=31)
+    df = pd.read_excel(
+        "Rociado Chuquisaca 2025.xlsx",
+        sheet_name="RESUMEN_2",
+        skiprows=8,
+        nrows=31
+    )
 
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
@@ -301,8 +305,10 @@ def load_basic():
 
 @st.cache_data
 def load_malaria():
-    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx",
-                       "Base de Datos Negativos")
+    df = pd.read_excel(
+        "Datos Estadisticos Malaria 2025.xlsx",
+        "Base de Datos Negativos"
+    )
 
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
@@ -313,7 +319,9 @@ def load_malaria():
 
     grouped = df.groupby("key").agg({
         "Municipio": "first",
-        "TOTAL": "sum"
+        "TOTAL": "sum",
+        "PR_TOTAL": "sum",
+        "NEGATIVA_TOTAL_TOTAL": "sum"
     }).reset_index()
 
     grouped["value"] = grouped["TOTAL"]
@@ -376,6 +384,7 @@ def get_row(name):
 
 def style(feature):
     row = get_row(feature["properties"]["NAME_3"])
+
     if row is None:
         return {"fillColor": "gray"}
 
@@ -400,18 +409,39 @@ with col_map:
         name = f["properties"]["NAME_3"]
         row = get_row(name)
 
-        popup = f"<b>{name}</b><br>"
         if row is not None:
-            popup += f"Valor: {row['value']:.2f}"
+
+            hotspot_text = "🔥 HOTSPOT<br>" if row["is_hotspot"] else ""
+
+            if disease == "malaria":
+                popup_html = f"""
+                <b>{name}</b><br>
+                {hotspot_text}
+                Total: {int(row['TOTAL'])}<br>
+                PR Total: {int(row['PR_TOTAL'])}<br>
+                Negativos: {int(row['NEGATIVA_TOTAL_TOTAL'])}<br>
+                Intensidad: {row['value_norm']:.2%}
+                """
+            else:
+                popup_html = f"""
+                <b>{name}</b><br>
+                {hotspot_text}
+                Cobertura: {row['value']:.2%}<br>
+                Casas rociadas: {int(row['viv_roc'])}<br>
+                Total viviendas: {int(row['viv_exist'])}
+                """
+
+        else:
+            popup_html = f"<b>{name}</b><br>Sin datos"
 
         folium.GeoJson(
             f,
             style_function=style,
-            popup=popup,
+            popup=folium.Popup(popup_html, max_width=300),
             tooltip=name
         ).add_to(m)
 
-    map_data = st_folium(m, width=700, height=500)
+    st_folium(m, width=700, height=500)
 
 with col_info:
     st.subheader("📌 Insights")
@@ -439,4 +469,9 @@ st.pyplot(fig)
 # 10. 상세 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
-st.dataframe(df.sort_values("value", ascending=False))
+
+# 🔥 malaria일 때 key 제거
+if disease == "malaria":
+    st.dataframe(df.drop(columns=["key"]).sort_values("value", ascending=False))
+else:
+    st.dataframe(df.sort_values("value", ascending=False))
