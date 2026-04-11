@@ -95,8 +95,9 @@ Original file is located at
 #     ["Mayor valor", "Menor valor", "Nombre A-Z", "Nombre Z-A"]
 # )
 
+# search_term = st.sidebar.text_input("🔍 Buscar municipio")
 # top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
-# show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots (Top 10%)", True)
+# show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
 
 # # =========================================
 # # 5. 데이터 선택
@@ -107,7 +108,13 @@ Original file is located at
 #     df["value"] = df["coverage"]
 
 # # =========================================
-# # 6. 정렬 + 필터
+# # 6. 검색 필터
+# # =========================================
+# if search_term:
+#     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
+
+# # =========================================
+# # 7. 정렬 + 필터
 # # =========================================
 # if sort_option == "Mayor valor":
 #     df_sorted = df.sort_values("value", ascending=False)
@@ -121,13 +128,13 @@ Original file is located at
 # df_filtered = df_sorted.head(top_n)
 
 # # =========================================
-# # 7. HOTSPOT
+# # 8. HOTSPOT
 # # =========================================
 # cutoff = df["value"].quantile(0.9)
 # df["is_hotspot"] = df["value"] >= cutoff
 
 # # =========================================
-# # 8. KPI
+# # 9. KPI
 # # =========================================
 # st.subheader("📊 Resumen general")
 
@@ -138,7 +145,13 @@ Original file is located at
 # col4.metric("Total", len(df))
 
 # # =========================================
-# # 9. MAP
+# # 10. 선택 상태
+# # =========================================
+# if "selected_municipio" not in st.session_state:
+#     st.session_state.selected_municipio = None
+
+# # =========================================
+# # 11. MAP
 # # =========================================
 # def get_row(name):
 #     key = normalize(name)
@@ -146,28 +159,64 @@ Original file is located at
 #     return r.iloc[0] if len(r) else None
 
 # def style(feature):
-#     row = get_row(feature["properties"]["NAME_3"])
-#     if row is None: return {"fillColor":"gray"}
+#     name = feature["properties"]["NAME_3"]
+#     row = get_row(name)
+
+#     if row is None:
+#         return {"fillColor":"gray"}
 
 #     if show_hotspot and row["is_hotspot"]:
 #         return {"fillColor":"#6a00ff","weight":3}
 
 #     val = safe_float(row.get("value_norm")) if disease=="malaria" else safe_float(row.get("value"))
 #     color = "#1a9850" if val<0.2 else "#fee08b" if val<0.4 else "#d73027"
+
+#     if st.session_state.selected_municipio == name:
+#         return {"fillColor":"#2b83ba","color":"yellow","weight":4}
+
 #     return {"fillColor":color,"fillOpacity":0.7}
 
 # st.subheader("🗺️ Mapa interactivo")
+
 # m = folium.Map(location=[-19,-65], zoom_start=8)
 
 # for f in geojson["features"]:
-#     folium.GeoJson(f, style_function=style).add_to(m)
+#     name = f["properties"]["NAME_3"]
 
-# st_folium(m, width=800, height=500)
+#     folium.GeoJson(
+#         f,
+#         style_function=style,
+#         tooltip=name
+#     ).add_to(m)
+
+# map_data = st_folium(m, width=800, height=500)
+
+# # 클릭 이벤트 처리
+# if map_data and map_data.get("last_active_drawing"):
+#     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # # =========================================
-# # 10. 그래프 (df_filtered 사용)
+# # 12. 상세 데이터
 # # =========================================
-# st.subheader("📊 Distribución interactiva")
+# if st.session_state.selected_municipio:
+#     st.subheader(f"📍 Detalle: {st.session_state.selected_municipio}")
+
+#     r = get_row(st.session_state.selected_municipio)
+
+#     if r is not None:
+#         if disease == "malaria":
+#             st.dataframe(
+#                 malaria_raw[
+#                     malaria_raw["key"] == normalize(st.session_state.selected_municipio)
+#                 ].drop(columns=["key"])
+#             )
+#         else:
+#             st.json(r.to_dict())
+
+# # =========================================
+# # 13. 그래프
+# # =========================================
+# st.subheader("📊 Distribución")
 
 # df_filtered = df_filtered.dropna(subset=["municipio","value"])
 
@@ -182,7 +231,7 @@ Original file is located at
 # st.plotly_chart(fig, use_container_width=True)
 
 # # =========================================
-# # 11. 월별
+# # 14. 월별
 # # =========================================
 # if disease=="malaria":
 #     st.subheader("📈 Tendencia mensual")
@@ -190,7 +239,7 @@ Original file is located at
 #     st.plotly_chart(px.line(monthly, x="Mes", y="TOTAL", markers=True), use_container_width=True)
 
 # # =========================================
-# # 12. Red 분석
+# # 15. Red 분석
 # # =========================================
 # if disease=="malaria":
 #     st.subheader("🏥 Red de Salud")
@@ -198,7 +247,7 @@ Original file is located at
 #     st.plotly_chart(px.bar(red, x="RedDeSalud", y="TOTAL"), use_container_width=True)
 
 # # =========================================
-# # 13. 테이블 (df_filtered 사용)
+# # 16. 테이블
 # # =========================================
 # st.subheader("📋 Datos detallados")
 
@@ -314,6 +363,18 @@ if search_term:
     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
 
 # =========================================
+# 6.5 검색 시 선택 자동 업데이트
+# =========================================
+if "selected_municipio" not in st.session_state:
+    st.session_state.selected_municipio = None
+
+if search_term:
+    if len(df) > 0:
+        st.session_state.selected_municipio = df.iloc[0]["municipio"]
+    else:
+        st.session_state.selected_municipio = None
+
+# =========================================
 # 7. 정렬 + 필터
 # =========================================
 if sort_option == "Mayor valor":
@@ -340,18 +401,12 @@ st.subheader("📊 Resumen general")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Promedio", f"{df['value'].mean():.2%}")
-col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"])
-col3.metric("Hotspots", int(df["is_hotspot"].sum()))
+col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"] if len(df)>0 else "-")
+col3.metric("Hotspots", int(df["is_hotspot"].sum()) if len(df)>0 else 0)
 col4.metric("Total", len(df))
 
 # =========================================
-# 10. 선택 상태
-# =========================================
-if "selected_municipio" not in st.session_state:
-    st.session_state.selected_municipio = None
-
-# =========================================
-# 11. MAP
+# 10. MAP
 # =========================================
 def get_row(name):
     key = normalize(name)
@@ -396,7 +451,7 @@ if map_data and map_data.get("last_active_drawing"):
     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
-# 12. 상세 데이터
+# 11. 상세 데이터
 # =========================================
 if st.session_state.selected_municipio:
     st.subheader(f"📍 Detalle: {st.session_state.selected_municipio}")
@@ -414,7 +469,7 @@ if st.session_state.selected_municipio:
             st.json(r.to_dict())
 
 # =========================================
-# 13. 그래프
+# 12. 그래프
 # =========================================
 st.subheader("📊 Distribución")
 
@@ -431,7 +486,7 @@ fig.update_layout(xaxis_tickangle=-45)
 st.plotly_chart(fig, use_container_width=True)
 
 # =========================================
-# 14. 월별
+# 13. 월별
 # =========================================
 if disease=="malaria":
     st.subheader("📈 Tendencia mensual")
@@ -439,7 +494,7 @@ if disease=="malaria":
     st.plotly_chart(px.line(monthly, x="Mes", y="TOTAL", markers=True), use_container_width=True)
 
 # =========================================
-# 15. Red 분석
+# 14. Red 분석
 # =========================================
 if disease=="malaria":
     st.subheader("🏥 Red de Salud")
@@ -447,7 +502,7 @@ if disease=="malaria":
     st.plotly_chart(px.bar(red, x="RedDeSalud", y="TOTAL"), use_container_width=True)
 
 # =========================================
-# 16. 테이블
+# 15. 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
 
