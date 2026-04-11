@@ -8,6 +8,8 @@ Original file is located at
 """
 
 from streamlit_folium import st_folium
+from branca.element import MacroElement
+from jinja2 import Template
 import plotly.express as px
 import streamlit as st
 import pandas as pd
@@ -227,11 +229,10 @@ col_map, col_legend = st.columns([4, 1])
 with col_map:
     m = folium.Map(location=[-19, -65], zoom_start=8)
 
-    # ✅ FIX 1: 안전한 loop 복원
+    # ✅ FIX: 반드시 feature loop 복구
     for f in geojson["features"]:
-        # geometry 없는 feature 방어
         if not f.get("geometry"):
-            continue
+            continue  # geometry 없는 데이터 방어
 
         folium.GeoJson(
             f,
@@ -243,14 +244,17 @@ with col_map:
             )
         ).add_to(m)
 
-    map_data = st_folium(m, width=800, height=500)
+# FLOATING LEGEND (정상 동작 방식)
+legend = MacroElement()
 
-legend_html = """
+legend._template = Template("""
+{% macro html(this, kwargs) %}
+
 <div style="
     position: fixed;
-    bottom: 50px;
-    left: 50px;
-    width: 180px;
+    bottom: 40px;
+    left: 40px;
+    width: 190px;
     background-color: white;
     border: 2px solid grey;
     z-index: 9999;
@@ -271,9 +275,13 @@ legend_html = """
 ⚪ Sin datos
 
 </div>
-"""
 
-m.get_root().html.add_child(folium.Element(legend_html))
+{% endmacro %}
+""")
+
+m.get_root().add_child(legend)
+
+map_data = st_folium(m, width=800, height=500)
 
 # =========================================
 # 14. Toggle
