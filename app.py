@@ -218,51 +218,62 @@ def style(feature):
     return {"fillColor":color,"fillOpacity":0.7}
 
 # =========================================
-# 13. MAP + LEGEND
+# 13. MAP + FLOATING LEGEND
 # =========================================
 st.subheader("🗺️ Mapa")
 
-col_map, col_legend = st.columns([4,1])
+col_map, col_legend = st.columns([4, 1])
 
 with col_map:
-    m = folium.Map(location=[-19,-65], zoom_start=8)
+    m = folium.Map(location=[-19, -65], zoom_start=8)
 
-    folium.GeoJson(
-    f,
-    style_function=style,
-    tooltip=folium.GeoJsonTooltip(
-        fields=["NAME_3"],
-        labels=False,
-        sticky=True)).add_to(m)
+    # ✅ FIX 1: 안전한 loop 복원
+    for f in geojson["features"]:
+        # geometry 없는 feature 방어
+        if not f.get("geometry"):
+            continue
 
-    # for f in geojson["features"]:
-    #     folium.GeoJson(
-    #         f,
-    #         style_function=style,
-    #         tooltip=folium.GeoJsonTooltip(fields=["NAME_3"])
-    #     ).add_to(m)
+        folium.GeoJson(
+            f,
+            style_function=style,
+            tooltip=folium.GeoJsonTooltip(
+                fields=["NAME_3"],
+                labels=False,
+                sticky=True
+            )
+        ).add_to(m)
 
     map_data = st_folium(m, width=800, height=500)
 
-with col_legend:
-    st.markdown("""
-    <div style="
-        position: sticky;
-        top: 20px;
-        text-align: left;
-        padding-left: 8px;
-    ">
-    ### 🎨 Nivel de Riesgo
+legend_html = """
+<div style="
+    position: fixed;
+    bottom: 50px;
+    left: 50px;
+    width: 180px;
+    background-color: white;
+    border: 2px solid grey;
+    z-index: 9999;
+    font-size: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+">
 
-    🟢 Bajo (<5)
-    🟡 Medio (5–15)
-    🔴 Alto (>15)
+<b>🎨 Nivel de Riesgo</b><br><br>
 
-    🟣 Hotspot
-    🔵 Seleccionado
-    ⚪ Sin datos
-    </div>
-    """, unsafe_allow_html=True)
+🟢 Bajo (<5)<br>
+🟡 Medio (5–15)<br>
+🔴 Alto (>15)<br><br>
+
+🟣 Hotspot<br>
+🔵 Seleccionado<br>
+⚪ Sin datos
+
+</div>
+"""
+
+m.get_root().html.add_child(folium.Element(legend_html))
 
 # =========================================
 # 14. Toggle
