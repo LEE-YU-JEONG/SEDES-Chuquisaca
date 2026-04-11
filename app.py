@@ -209,7 +209,7 @@ def style(feature):
         return {"fillColor":"gray"}
 
     if st.session_state.selected_municipio == name:
-        return {"fillColor":"#08519c","color":"yellow","weight":4}
+        return {"fillColor":"#041c4c","color":"yellow","weight":4}
 
     if show_hotspot and row.get("is_hotspot", False):
         return {"fillColor":"#6a00ff","weight":3}
