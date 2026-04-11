@@ -400,7 +400,7 @@ if search_term:
     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
 
 # =========================================
-# 정렬 (🔥 FIX)
+# 정렬
 # =========================================
 if sort_option == "Mayor valor":
     df = df.sort_values("value", ascending=False)
@@ -428,6 +428,23 @@ if len(df) > 0:
     df["is_hotspot"] = df["value"] >= cutoff
 else:
     df["is_hotspot"] = False
+
+# =========================================
+# HOTSPOT 배너
+# =========================================
+top3 = df.sort_values("value", ascending=False).head(3)
+
+if len(top3) > 0:
+    text_items = []
+    for _, row in top3.iterrows():
+        val = f"{row['value']:.2%}" if disease=="chagas" else f"{row['value']:.1f}"
+        text_items.append(f"{row['municipio']} ({val})")
+
+    st.markdown(f"""
+    <div style="background-color:#ba2020;padding:15px;border-radius:10px;color:white;font-weight:bold;">
+    ⚠️ Hotspots principales: {" | ".join(text_items)}
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================
 # MAP
@@ -472,16 +489,10 @@ if map_data and map_data.get("last_active_drawing"):
     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
-# 그래프
-# =========================================
-st.subheader("📊 Distribución")
-st.plotly_chart(px.bar(df.head(top_n), x="municipio", y="value"), use_container_width=True)
-
-# =========================================
-# 🔥 선택된 지역 상세 데이터
+# 선택된 지역 상세 데이터
 # =========================================
 if st.session_state.selected_municipio:
-    st.subheader(f"📍 Detalle: {st.session_state.selected_municipio}")
+    st.subheader(f"📍 {st.session_state.selected_municipio}")
 
     key = normalize(st.session_state.selected_municipio)
 
@@ -495,6 +506,12 @@ if st.session_state.selected_municipio:
         detail = basic_df[basic_df["key"] == key]
 
     st.dataframe(detail)
+
+# =========================================
+# 그래프
+# =========================================
+st.subheader("📊 Distribución")
+st.plotly_chart(px.bar(df.head(top_n), x="municipio", y="value"), use_container_width=True)
 
 # =========================================
 # 테이블
