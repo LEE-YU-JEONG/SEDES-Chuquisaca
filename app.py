@@ -326,33 +326,44 @@ def load_basic():
 # =========================================
 @st.cache_data
 def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado")
+    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx")
 
-    df.columns = df.columns.str.replace("\n", " ").str.strip()
+    # 컬럼 정리
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.replace("\n", " ")
+        .str.replace("\t", " ")
+    )
+
+    # 컬럼 자동 탐지
+    municipio_col = [c for c in df.columns if "Municipio" in c][0]
+    iv_col = [c for c in df.columns if "Indice de Viviendas" in c][0]
+    fecha_col = [c for c in df.columns if "FECHA EJECUCION_Inicio" in c][0]
 
     # TOTAL 행 제거
-    df = df[~df["Municipio"].str.contains("Total", na=False)]
+    df = df[~df[municipio_col].astype(str).str.contains("Total", na=False)]
 
     # municipio 정리
-    df["Municipio"] = df["Municipio"].str.strip()
-    df["key"] = df["Municipio"].apply(normalize)
+    df["municipio"] = df[municipio_col].astype(str).str.strip()
+    df["key"] = df["municipio"].apply(normalize)
 
     # 숫자 변환
-    df["Indice de Viviendas"] = pd.to_numeric(
-        df["INDICADORES ENTOMOLOGICOS_Indice de Viviendas"],
-        errors="coerce"
-    ).fillna(0)
+    df["IV"] = pd.to_numeric(df[iv_col], errors="coerce").fillna(0)
 
-    # municipio 기준 평균 (또는 sum도 가능)
+    # 날짜
+    df["Mes"] = pd.to_datetime(df[fecha_col], errors="coerce").dt.month
+
+    # 그룹화
     grouped = df.groupby("key").agg({
-        "Municipio":"first",
-        "Indice de Viviendas":"mean"
+        "municipio":"first",
+        "IV":"mean"
     }).reset_index()
 
-    grouped["value"] = grouped["Indice de Viviendas"]
+    grouped["value"] = grouped["IV"]
     grouped["value_norm"] = grouped["value"] / grouped["value"].max()
 
-    return grouped.rename(columns={"Municipio":"municipio"}), df
+    return grouped, df
 
 # =========================================
 # MALARIA
