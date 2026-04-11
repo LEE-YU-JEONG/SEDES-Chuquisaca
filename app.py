@@ -209,7 +209,7 @@ def style(feature):
         return {"fillColor":"gray"}
 
     if st.session_state.selected_municipio == name:
-        return {"fillColor":"#2b83ba","color":"yellow","weight":4}
+        return {"fillColor":"#08306b","color":"yellow","weight":4}
 
     if show_hotspot and row.get("is_hotspot", False):
         return {"fillColor":"#6a00ff","weight":3}
@@ -257,11 +257,11 @@ with col_legend:
             border-radius: 10px;
             border: 1px solid #ddd;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-            font-size: 13px;
+            font-size: 15px;
             margin-left: -200px;
         ">
 
-        <b>🎨 Nivel de Riesgo</b><br><br>
+        <b>⚠️ Nivel de Riesgo</b><br><br>
 
         🟢 Bajo (<5)<br>
         🟡 Medio (5–15)<br>
