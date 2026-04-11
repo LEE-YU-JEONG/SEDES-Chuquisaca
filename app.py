@@ -393,7 +393,7 @@ if len(top3) > 0:
 
     st.markdown(f"""
     <div style="
-        background-color:#fff3cd;
+        background-color:#ffc107;
         padding:15px;
         border-radius:10px;
         border-left:8px solid #ffc107;
