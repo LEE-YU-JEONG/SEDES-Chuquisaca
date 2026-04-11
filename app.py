@@ -50,7 +50,6 @@ def load_basic():
     df["value"] = df["viv_roc"].fillna(0) / df["viv_exist"].fillna(1)
     return df
 
-## DENGUE
 @st.cache_data
 def load_dengue():
     df = pd.read_excel(
@@ -59,23 +58,33 @@ def load_dengue():
         header=0
     )
 
-    # 🔥 컬럼명 정리 (핵심)
-    df.columns = df.columns.str.replace("\n", " ").str.strip()
+    # 🔥 1. 컬럼명 강제 정리 (핵심)
+    df.columns = (
+        df.columns
+        .str.replace("\n", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)  # 여러 공백 → 1개
+        .str.strip()
+    )
 
-    # 🔥 TOTAL 행 제거
+    # 🔥 디버깅 (한 번만 확인하고 나중에 지워도 됨)
+    # st.write(df.columns.tolist())
+
+    # 🔥 2. TOTAL 제거
     df = df[~df["Municipio"].astype(str).str.contains("Total", na=False)]
 
-    # 🔥 컬럼 매핑
+    # 🔥 3. 기본 컬럼
     df["municipio"] = df["Municipio"].astype(str).str.strip()
     df["key"] = df["municipio"].apply(normalize)
 
-    df["value"] = pd.to_numeric(
-        df["INDICADORES ENTOMOLOGICOS_Indice de Viviendas"],
-        errors="coerce"
-    ).fillna(0)
+    # 🔥 4. 컬럼 자동 탐색 (이게 핵심 안정장치)
+    iv_col = [c for c in df.columns if "Indice" in c and "Viviendas" in c][0]
+    fecha_col = [c for c in df.columns if "Inicio" in c][0]
+
+    # 🔥 5. 값 생성
+    df["value"] = pd.to_numeric(df[iv_col], errors="coerce").fillna(0)
 
     df["Mes"] = pd.to_datetime(
-        df["FECHA EJECUCION_Inicio"],
+        df[fecha_col],
         errors="coerce"
     ).dt.month
 
