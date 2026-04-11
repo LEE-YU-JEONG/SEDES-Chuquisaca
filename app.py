@@ -210,21 +210,16 @@ with col_legend:
         <div style="
             background-color: #1e1e1e;
             color: #ffffff;
-            padding: 25px;
+            padding: 15px;
             border-radius: 12px;
             border: 1px solid #333;
             box-shadow: 2px 2px 10px rgba(0,0,0,0.35);
-
-            width: 110%;
-            margin-left: -10px;
-
-            font-size: 15px;
-            min-width: 300px;
-            position: relative;
-            z-index: 10;
+            font-size: 14px;
+            min-width: 150px;
+            z-index: 1000;
         ">
             <div style="
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: 900;
                 color: #4fc3f7;
                 margin-bottom: 10px;
