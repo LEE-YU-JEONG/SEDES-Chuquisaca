@@ -470,13 +470,13 @@ import re
 import plotly.express as px
 
 # =========================================
-# 설정
+# 0. 설정
 # =========================================
 st.set_page_config(layout="wide")
 st.title("🦠 Informe Epidemiológico - Chuquisaca")
 
 # =========================================
-# normalize
+# 1. normalize
 # =========================================
 def normalize(text):
     text = str(text).strip()
@@ -489,7 +489,7 @@ def safe_int(x): return int(x) if pd.notna(x) else 0
 def safe_float(x): return float(x) if pd.notna(x) else 0.0
 
 # =========================================
-# 데이터 로드
+# 2. 데이터 로드
 # =========================================
 @st.cache_data
 def load_basic():
@@ -529,7 +529,7 @@ basic_df = load_basic()
 malaria_df, malaria_raw = load_malaria()
 
 # =========================================
-# GeoJSON
+# 3. GeoJSON
 # =========================================
 with open("gadm41_BOL_3.json") as f:
     geojson = json.load(f)
@@ -537,7 +537,7 @@ with open("gadm41_BOL_3.json") as f:
 geojson["features"] = [f for f in geojson["features"] if f["properties"]["NAME_1"]=="Chuquisaca"]
 
 # =========================================
-# Sidebar (핵심)
+# 4. Sidebar
 # =========================================
 st.sidebar.header("⚙️ Configuración")
 
@@ -545,7 +545,7 @@ disease = st.sidebar.selectbox("Enfermedad", ["chagas","dengue","malaria"])
 
 show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
 
-# 🔥 그래프 옵션
+# 그래프 옵션
 st.sidebar.subheader("📊 Gráfico")
 
 sort_option = st.sidebar.selectbox(
@@ -556,7 +556,7 @@ sort_option = st.sidebar.selectbox(
 top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
 
 # =========================================
-# 데이터 선택
+# 5. 데이터 선택
 # =========================================
 df = malaria_df.copy() if disease=="malaria" else basic_df.copy()
 
@@ -564,7 +564,7 @@ if disease != "malaria":
     df["value"] = df["coverage"]
 
 # =========================================
-# 정렬 로직
+# 6. 정렬 로직
 # =========================================
 if sort_option == "Mayor valor":
     df_sorted = df.sort_values("value", ascending=False)
@@ -578,19 +578,19 @@ else:
 df_filtered = df_sorted.head(top_n)
 
 # =========================================
-# HOTSPOT
+# 7. HOTSPOT
 # =========================================
 cutoff = df["value"].quantile(0.9)
 df["is_hotspot"] = df["value"] >= cutoff
 
 # =========================================
-# 선택 상태
+# 8. 선택 상태
 # =========================================
 if "selected_municipio" not in st.session_state:
     st.session_state.selected_municipio = None
 
 # =========================================
-# KPI (UI 개선)
+# 9. KPI (UI 개선)
 # =========================================
 st.subheader("📊 Resumen general")
 
@@ -601,12 +601,12 @@ col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"])
 col3.metric("Hotspots", int(df["is_hotspot"].sum()))
 col4.metric("Total", len(df))
 
-# 🚨 알림
+# 알림
 top3 = df.nlargest(3, "value")
 st.error(f"🚨 Zonas críticas: {', '.join(top3['municipio'])}")
 
 # =========================================
-# MAP
+# 10. MAP
 # =========================================
 def get_row(name):
     key = normalize(name)
@@ -654,7 +654,7 @@ if map_data and map_data.get("last_active_drawing"):
     st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
 
 # =========================================
-# 상세
+# 11. 상세
 # =========================================
 if st.session_state.selected_municipio:
     st.subheader(f"📍 Detalle: {st.session_state.selected_municipio}")
@@ -663,22 +663,42 @@ if st.session_state.selected_municipio:
         st.json(r.to_dict())
 
 # =========================================
-# 그래프
+# 12. 인터랙티브 그래프 (안정 버전)
 # =========================================
-st.subheader("📊 Distribución dinámica")
+st.subheader("📊 Distribución interactiva")
 
-fig = px.bar(
-    df_filtered,
-    x="municipio",
-    y="value",
-    color="is_hotspot",
-    hover_data=["value"]
-)
+# 안전 처리
+df_filtered = df.copy()
 
-st.plotly_chart(fig, use_container_width=True)
+# value 보장
+if "value" not in df_filtered.columns:
+    df_filtered["value"] = 0
+
+# NaN 제거
+df_filtered = df_filtered.dropna(subset=["municipio", "value"])
+
+# 데이터 없을 때 방어
+if len(df_filtered) == 0:
+    st.warning("No hay datos para mostrar")
+else:
+    import plotly.express as px
+
+    fig = px.bar(
+        df_filtered,
+        x="municipio",
+        y="value",
+        hover_data=["value"],
+    )
+
+    fig.update_layout(
+        xaxis_tickangle=-45,
+        height=400
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # =========================================
-# 월별
+# 13. 월별
 # =========================================
 if disease=="malaria":
     st.subheader("📈 Tendencia mensual")
@@ -689,7 +709,7 @@ if disease=="malaria":
     st.plotly_chart(fig2, use_container_width=True)
 
 # =========================================
-# Red 분석
+# 14. Red 분석
 # =========================================
 if disease=="malaria":
     st.subheader("🏥 Red de Salud")
@@ -700,7 +720,7 @@ if disease=="malaria":
     st.plotly_chart(fig3, use_container_width=True)
 
 # =========================================
-# 테이블
+# 15. 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
 
