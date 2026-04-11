@@ -227,17 +227,31 @@ col_map, col_legend = st.columns([4,1])
 with col_map:
     m = folium.Map(location=[-19,-65], zoom_start=8)
 
-    for f in geojson["features"]:
-        folium.GeoJson(
-            f,
-            style_function=style,
-            tooltip=folium.GeoJsonTooltip(fields=[""])
-        ).add_to(m)
+    folium.GeoJson(
+    f,
+    style_function=style,
+    tooltip=folium.GeoJsonTooltip(
+        fields=["NAME_3"],
+        labels=False,
+        sticky=True)).add_to(m)
+
+    # for f in geojson["features"]:
+    #     folium.GeoJson(
+    #         f,
+    #         style_function=style,
+    #         tooltip=folium.GeoJsonTooltip(fields=["NAME_3"])
+    #     ).add_to(m)
 
     map_data = st_folium(m, width=800, height=500)
 
 with col_legend:
     st.markdown("""
+    <div style="
+        position: sticky;
+        top: 20px;
+        text-align: left;
+        padding-left: 8px;
+    ">
     ### 🎨 Nivel de Riesgo
 
     🟢 Bajo (<5)
@@ -247,7 +261,8 @@ with col_legend:
     🟣 Hotspot
     🔵 Seleccionado
     ⚪ Sin datos
-    """)
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================
 # 14. Toggle
