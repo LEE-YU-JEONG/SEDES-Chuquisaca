@@ -266,28 +266,33 @@ with col_legend:
     st.markdown(
         """
         <div style="
-            background: white;
+            position: sticky;
+            top: 20px;
+
+            background: #1e1e1e;
+            color: #ffffff;
+
             padding: 14px 14px 12px 14px;
             border-radius: 12px;
-            border: 1px solid #ddd;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.12);
+            border: 1px solid #333;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.35);
 
-            font-size: 14px;
-            margin-left: -10px;
+            font-size: 15px;
         ">
 
+        <!-- TITLE -->
         <div style="
-            font-size:18px;
-            font-weight:800;
-            color:#2b83ba;
-            margin-bottom:6px;
+            font-size:20px;
+            font-weight:900;
+            color:#4fc3f7;
+            margin-bottom:8px;
         ">
             ⚠️ Nivel de Riesgo
         </div>
 
-        <hr style="margin:6px 0 10px 0; border:0.5px solid #e0e0e0;">
+        <hr style="margin:6px 0 10px 0; border:0.5px solid #444;">
 
-        <div style="line-height:1.6;">
+        <div style="line-height:1.7;">
 
             🟢 <b>Bajo</b> (&lt;5)<br>
             🟡 <b>Medio</b> (5–15)<br>
