@@ -261,13 +261,13 @@ Original file is located at
 # st.dataframe(df.drop(columns=["key"], errors="ignore"))
 
 from streamlit_folium import st_folium
+import plotly.express as px
 import streamlit as st
 import pandas as pd
 import unicodedata
 import folium
 import json
 import re
-import plotly.express as px
 
 # =========================================
 # 설정
@@ -308,15 +308,22 @@ def load_basic():
 @st.cache_data
 def load_malaria():
     df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx","Base de Datos Negativos")
-    df["Municipio"] = df["Municipio"].str.strip()
-    df["key"] = df["Municipio"].apply(normalize)
 
+    df["Municipio"] = df["Municipio"].astype(str).str.strip()
+    df["key"] = df["Municipio"].apply(normalize)
     df["TOTAL"] = pd.to_numeric(df["TOTAL"], errors="coerce").fillna(0)
 
-    # 🔥 Mes 컬럼 없을 경우 생성
-    if "Mes" not in df.columns:
-        if "Fecha" in df.columns:
-            df["Mes"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.month
+    # 날짜 기반 Mes 생성 (무조건)
+    date_col = None
+    for c in df.columns:
+        if "fecha" in c.lower():
+            date_col = c
+            break
+
+    if date_col:
+        df["Mes"] = pd.to_datetime(df[date_col], errors="coerce").dt.month
+    else:
+        df["Mes"] = None  # fallback
 
     grouped = df.groupby("key").agg({
         "Municipio":"first",
@@ -365,25 +372,15 @@ malaria_df, malaria_raw = load_malaria()
 dengue_df, dengue_raw = load_dengue()
 
 # =========================================
-# GEOJSON
-# =========================================
-with open("gadm41_BOL_3.json") as f:
-    geojson = json.load(f)
-
-geojson["features"] = [f for f in geojson["features"] if f["properties"]["NAME_1"]=="Chuquisaca"]
-
-# =========================================
 # SIDEBAR
 # =========================================
 st.sidebar.header("⚙️ Configuración")
 
 disease = st.sidebar.selectbox("Enfermedad", ["chagas","dengue","malaria"])
-
 sort_option = st.sidebar.selectbox(
     "Ordenar por",
     ["Mayor valor", "Menor valor", "Nombre A-Z", "Nombre Z-A"]
 )
-
 search_term = st.sidebar.text_input("🔍 Buscar municipio")
 top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
 show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
@@ -405,87 +402,24 @@ if search_term:
     df = df[df["municipio"].str.contains(search_term, case=False, na=False)]
 
 # =========================================
-# 선택 상태
+# 정렬
 # =========================================
-if "selected_municipio" not in st.session_state:
-    st.session_state.selected_municipio = None
-
-if search_term and len(df) > 0:
-    st.session_state.selected_municipio = df.iloc[0]["municipio"]
-
-# =========================================
-# HOTSPOT 계산
-# =========================================
-if len(df) > 0:
-    cutoff = df["value"].quantile(0.9)
-    df["is_hotspot"] = df["value"] >= cutoff
+if sort_option == "Mayor valor":
+    df_sorted = df.sort_values("value", ascending=False)
+elif sort_option == "Menor valor":
+    df_sorted = df.sort_values("value", ascending=True)
+elif sort_option == "Nombre A-Z":
+    df_sorted = df.sort_values("municipio")
 else:
-    df["is_hotspot"] = False
+    df_sorted = df.sort_values("municipio", ascending=False)
 
-# =========================================
-# HOTSPOT 배너
-# =========================================
-top3 = df.sort_values("value", ascending=False).head(3)
-
-if len(top3) > 0:
-    text_items = []
-    for _, row in top3.iterrows():
-        val = f"{row['value']:.2%}" if disease=="chagas" else f"{row['value']:.1f}"
-        text_items.append(f"{row['municipio']} ({val})")
-
-    st.markdown(f"""
-    <div style="background-color:#ba2020;padding:15px;border-radius:10px;color:white;font-weight:bold;">
-    ⚠️ Hotspots principales: {" | ".join(text_items)}
-    </div>
-    """, unsafe_allow_html=True)
-
-# =========================================
-# MAP
-# =========================================
-def get_row(name):
-    key = normalize(name)
-    r = df[df["key"]==key]
-    return r.iloc[0] if len(r) else None
-
-def style(feature):
-    name = feature["properties"]["NAME_3"]
-    row = get_row(name)
-
-    if row is None:
-        return {"fillColor":"gray"}
-
-    if st.session_state.selected_municipio == name:
-        return {"fillColor":"#2b83ba","color":"yellow","weight":4}
-
-    if show_hotspot and row.get("is_hotspot", False):
-        return {"fillColor":"#6a00ff","weight":3}
-
-    val = safe_float(row.get("value"))
-    color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
-
-    return {"fillColor":color,"fillOpacity":0.7}
-
-st.subheader("🗺️ Mapa")
-
-m = folium.Map(location=[-19,-65], zoom_start=8)
-
-for f in geojson["features"]:
-    folium.GeoJson(
-        f,
-        style_function=style,
-        tooltip=folium.GeoJsonTooltip(fields=["NAME_3"], aliases=[""])
-    ).add_to(m)
-
-map_data = st_folium(m, width=800, height=500)
-
-if map_data and map_data.get("last_active_drawing"):
-    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
+df_filtered = df_sorted.head(top_n)
 
 # =========================================
 # 그래프
 # =========================================
 st.subheader("📊 Distribución")
-st.plotly_chart(px.bar(df, x="municipio", y="value"), use_container_width=True)
+st.plotly_chart(px.bar(df_filtered, x="municipio", y="value"), use_container_width=True)
 
 # =========================================
 # 월별
@@ -499,31 +433,34 @@ mes_map = {
 if disease=="dengue":
     st.subheader("📈 Tendencia mensual")
 
-    monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
+    monthly = dengue_raw.dropna(subset=["Mes"])
+    monthly = monthly.groupby("Mes")["value"].mean().reset_index()
     monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
 
     st.plotly_chart(
-        px.line(monthly, x="Mes_nombre", y="value", markers=True,
-                category_orders={"Mes_nombre": list(mes_map.values())}),
+        px.line(monthly, x="Mes_nombre", y="value", markers=True),
         use_container_width=True
     )
 
-# Malaria
+# Malaria 완전 수정
 if disease=="malaria":
     st.subheader("📈 Tendencia mensual")
 
-    if "Mes" in malaria_raw.columns:
-        monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
+    monthly = malaria_raw.dropna(subset=["Mes"])
+
+    if len(monthly) > 0:
+        monthly = monthly.groupby("Mes")["TOTAL"].sum().reset_index()
         monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
 
         st.plotly_chart(
-            px.line(monthly, x="Mes_nombre", y="TOTAL", markers=True,
-                    category_orders={"Mes_nombre": list(mes_map.values())}),
+            px.line(monthly, x="Mes_nombre", y="TOTAL", markers=True),
             use_container_width=True
         )
+    else:
+        st.warning("⚠️ No hay datos de fecha para malaria")
 
 # =========================================
 # 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
-st.dataframe(df.drop(columns=["key"], errors="ignore"))
+st.dataframe(df_filtered.drop(columns=["key"], errors="ignore"))
