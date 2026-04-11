@@ -326,32 +326,27 @@ def load_basic():
 # =========================================
 @st.cache_data
 def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado")
+    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", sheet_name = "Consolidado", header=0)
 
-    # 컬럼 정리
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.replace("\n", " ")
-        .str.replace("\t", " ")
-    )
+    # 컬럼 강제 재정의 (핵심)
+    df.columns = range(len(df.columns))
 
-    # 컬럼 자동 탐지
-    municipio_col = [c for c in df.columns if "Municipio" in c][0]
-    iv_col = [c for c in df.columns if "Indice de Viviendas" in c][0]
-    fecha_col = [c for c in df.columns if "FECHA EJECUCION_Inicio" in c][0]
+    # 컬럼 위치 기반 지정
+    municipio_col = 0
+    fecha_col = 2
+    iv_col = 8   # "Indice de Viviendas"
 
-    # TOTAL 행 제거
+    # TOTAL 제거
     df = df[~df[municipio_col].astype(str).str.contains("Total", na=False)]
 
-    # municipio 정리
+    # municipio
     df["municipio"] = df[municipio_col].astype(str).str.strip()
     df["key"] = df["municipio"].apply(normalize)
 
-    # 숫자 변환
+    # IV
     df["IV"] = pd.to_numeric(df[iv_col], errors="coerce").fillna(0)
 
-    # 날짜
+    # 날짜 → 월
     df["Mes"] = pd.to_datetime(df[fecha_col], errors="coerce").dt.month
 
     # 그룹화
@@ -370,7 +365,7 @@ def load_dengue():
 # =========================================
 @st.cache_data
 def load_malaria():
-    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx","Base de Datos Negativos")
+    df = pd.read_excel("Datos Estadisticos Malaria 2025.xlsx", sheet_name="Base de Datos Negativos")
     df["Municipio"] = df["Municipio"].str.strip()
     df["key"] = df["Municipio"].apply(normalize)
 
