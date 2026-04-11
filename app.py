@@ -363,11 +363,9 @@ def safe_float(x): return float(x) if pd.notna(x) else 0.0
 # =========================================
 # 2. Data Load
 # =========================================
-## Chagas
 @st.cache_data
 def load_chagas():
     df = pd.read_excel("Data/Rociado Chuquisaca 2025.xlsx", sheet_name="RESUMEN_2", skiprows=8, nrows=31)
-
     df.columns = df.columns.str.replace("\n", " ").str.strip()
     df = df.rename(columns={"MUNICIPIO":"municipio","EXIST":"viv_exist","ROC":"viv_roc"})
     df = df[df["municipio"].notna()]
@@ -377,13 +375,19 @@ def load_chagas():
     df["value"] = df["viv_roc"].fillna(0) / df["viv_exist"].fillna(1)
     return df
 
-## Dengue
 @st.cache_data
 def load_dengue():
     df = pd.read_excel("Data/BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx","Consolidado",header=0)
 
-    df.columns = (df.columns.str.replace("\n", " ", regex=True).str.replace(r"\s+", " ", regex=True))  # 여러 공백 → 1개.str.strip()
+    df.columns = (
+        df.columns
+        .str.replace("\n", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
     df = df[~df["Municipio"].astype(str).str.contains("Total", na=False)]
+
     df["municipio"] = df["Municipio"].astype(str).str.strip()
     df["key"] = df["municipio"].apply(normalize)
 
@@ -391,14 +395,20 @@ def load_dengue():
     fecha_col = [c for c in df.columns if "Inicio" in c][0]
 
     df["value"] = pd.to_numeric(df[iv_col], errors="coerce").fillna(0)
-    df["Mes"] = pd.to_datetime(df[fecha_col],errors="coerce").dt.month
+
+    df["Mes"] = pd.to_datetime(
+        df[fecha_col],
+        errors="coerce",
+        dayfirst=True
+    ).dt.month
+
+    df = df[df["Mes"].between(1,12)]
 
     grouped = df.groupby("key").agg({"municipio":"first","value":"mean"}).reset_index()
     grouped["value_norm"] = grouped["value"] / grouped["value"].max()
 
     return grouped, df
 
-## MALARIA
 @st.cache_data
 def load_malaria():
     df = pd.read_excel("Data/Datos Estadisticos Malaria 2025.xlsx","Base de Datos Negativos")
@@ -454,11 +464,6 @@ elif disease == "dengue":
 else:
     df = basic_df.copy()
 
-col_reset = st.sidebar.button("🔄 Ver todo (Reset selección)")
-
-if col_reset:
-    st.session_state.selected_municipio = None
-
 # =========================================
 # 7. Search
 # =========================================
@@ -478,13 +483,10 @@ elif sort_option == "Nombre Z-A":
     df = df.sort_values("municipio", ascending=False)
 
 # =========================================
-# 9. Select State
+# 9. Select State (토글 방식)
 # =========================================
 if "selected_municipio" not in st.session_state:
     st.session_state.selected_municipio = None
-
-if search_term and len(df) > 0:
-    st.session_state.selected_municipio = df.iloc[0]["municipio"]
 
 # =========================================
 # 10. HOTSPOT
@@ -517,13 +519,10 @@ if len(top3) > 0:
 # =========================================
 if len(df) > 0:
     total_value = df["value"].sum()
-
     max_row = df.loc[df["value"].idxmax()]
     max_name = max_row["municipio"]
     max_value = max_row["value"]
-
     top3_mean = df.nlargest(3, "value")["value"].mean()
-
     cutoff = df["value"].quantile(0.9)
     hotspot_ratio = (df["value"] >= cutoff).sum() / len(df)
 
@@ -579,8 +578,14 @@ for f in geojson["features"]:
 
 map_data = st_folium(m, width=800, height=500)
 
+# 토글 로직
 if map_data and map_data.get("last_active_drawing"):
-    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
+    clicked = map_data["last_active_drawing"]["properties"]["NAME_3"]
+
+    if st.session_state.selected_municipio == clicked:
+        st.session_state.selected_municipio = None
+    else:
+        st.session_state.selected_municipio = clicked
 
 # =========================================
 # 14. Selected region detailed data
@@ -592,10 +597,8 @@ if st.session_state.selected_municipio:
 
     if disease == "malaria":
         detail = malaria_raw[malaria_raw["key"] == key]
-
     elif disease == "dengue":
         detail = dengue_raw[dengue_raw["key"] == key]
-
     else:
         detail = basic_df[basic_df["key"] == key]
 
@@ -607,67 +610,32 @@ if st.session_state.selected_municipio:
 st.subheader("📊 Distribución")
 st.plotly_chart(px.bar(df.head(top_n), x="municipio", y="value"), use_container_width=True)
 
+# =========================================
+# 15-1. Dengue Trend (토글 연동)
+# =========================================
 if disease == "dengue":
 
-    st.subheader("📈 Tendencia Mensual (Indice de Viviendas)")
+    st.subheader("📈 Tendencia Mensual")
 
-    if len(dengue_raw) > 0:
+    trend_df = dengue_raw.copy()
 
-        trend_df = dengue_raw.copy()
+    if st.session_state.selected_municipio:
+        key = normalize(st.session_state.selected_municipio)
+        trend_df = trend_df[trend_df["key"] == key]
+        st.caption(f"📍 {st.session_state.selected_municipio}")
+    else:
+        st.caption("🌐 Total")
 
-        # 🔥 선택 지역 필터
-        if st.session_state.selected_municipio:
-            selected_key = normalize(st.session_state.selected_municipio)
-            filtered = trend_df[trend_df["key"] == selected_key]
+    trend_df = trend_df.dropna(subset=["Mes"])
 
-            if len(filtered) > 0:
-                trend_df = filtered
-                st.caption(f"📍 Municipio: {st.session_state.selected_municipio}")
-            else:
-                st.caption("⚠️ Sin datos → mostrando total")
-        else:
-            st.caption("🌐 Vista total (Chuquisaca)")
+    monthly = trend_df.groupby("Mes")["value"].mean().reset_index().sort_values("Mes")
 
-        trend_df = trend_df.dropna(subset=["Mes"])
+    if len(monthly) > 0:
+        month_map = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"}
+        monthly["Mes_nombre"] = monthly["Mes"].map(month_map)
 
-        monthly = (
-            trend_df
-            .groupby("Mes")["value"]
-            .mean()
-            .reset_index()
-            .sort_values("Mes")
-        )
-
-        if len(monthly) == 0:
-            st.warning("No hay datos disponibles")
-        else:
-            month_map = {
-                1:"Ene",2:"Feb",3:"Mar",4:"Abr",
-                5:"May",6:"Jun",7:"Jul",8:"Ago",
-                9:"Sep",10:"Oct",11:"Nov",12:"Dic"
-            }
-
-            monthly["Mes_nombre"] = monthly["Mes"].map(month_map)
-
-            fig = px.line(
-                monthly,
-                x="Mes_nombre",
-                y="value",
-                markers=True
-            )
-
-            fig.update_layout(
-                xaxis_title="Mes",
-                yaxis_title="Indice de Viviendas",
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-# =========================================
-# 🔥 15-2. Malaria 메시지 (UX 통일)
-# =========================================
-if disease == "malaria":
-    st.info("ℹ️ Malaria no tiene datos mensuales disponibles para tendencia")
+        fig = px.line(monthly, x="Mes_nombre", y="value", markers=True)
+        st.plotly_chart(fig, use_container_width=True)
 
 # =========================================
 # 16. Table
