@@ -289,7 +289,7 @@ import re
 import plotly.express as px
 
 # =========================================
-# 설정
+# 0. 설정
 # =========================================
 st.set_page_config(layout="wide")
 st.title("🦠 Informe Epidemiológico - Chuquisaca")
@@ -347,7 +347,8 @@ def load_malaria():
 # =========================================
 @st.cache_data
 def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", header=0)
+    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado", header=0)
+
     df.columns = range(len(df.columns))
 
     municipio_col = 0
@@ -391,7 +392,15 @@ geojson["features"] = [f for f in geojson["features"] if f["properties"]["NAME_1
 st.sidebar.header("⚙️ Configuración")
 
 disease = st.sidebar.selectbox("Enfermedad", ["chagas","dengue","malaria"])
+
+sort_option = st.sidebar.selectbox(
+    "Ordenar por",
+    ["Mayor valor", "Menor valor", "Nombre A-Z", "Nombre Z-A"]
+)
+
 search_term = st.sidebar.text_input("🔍 Buscar municipio")
+top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
+show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
 
 # =========================================
 # 데이터 선택
@@ -417,6 +426,47 @@ if "selected_municipio" not in st.session_state:
 
 if search_term and len(df) > 0:
     st.session_state.selected_municipio = df.iloc[0]["municipio"]
+
+# =========================================
+# HOTSPOT 배너
+# =========================================
+top3 = df.sort_values("value", ascending=False).head(3)
+
+if len(top3) > 0:
+    text_items = []
+    for _, row in top3.iterrows():
+        val = f"{row['value']:.2%}" if disease=="chagas" else f"{row['value']:.1f}"
+        text_items.append(f"{row['municipio']} ({val})")
+
+    st.markdown(f"""
+    <div style="background-color:#ba2020;padding:15px;border-radius:10px;color:white;font-weight:bold;">
+    ⚠️ Hotspots principales: {" | ".join(text_items)}
+    </div>
+    """, unsafe_allow_html=True)
+
+# =========================================
+# 정렬
+# =========================================
+if sort_option == "Mayor valor":
+    df_sorted = df.sort_values("value", ascending=False)
+elif sort_option == "Menor valor":
+    df_sorted = df.sort_values("value", ascending=True)
+elif sort_option == "Nombre A-Z":
+    df_sorted = df.sort_values("municipio")
+else:
+    df_sorted = df.sort_values("municipio", ascending=False)
+
+df_filtered = df_sorted.head(top_n)
+
+# =========================================
+# KPI
+# =========================================
+st.subheader("📊 Resumen general")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Promedio", f"{df['value'].mean():.2f}")
+col2.metric("Máximo", df.loc[df["value"].idxmax(),"municipio"] if len(df)>0 else "-")
+col3.metric("Total", len(df))
 
 # =========================================
 # MAP
@@ -470,14 +520,14 @@ if st.session_state.selected_municipio:
         st.dataframe(
             malaria_raw[
                 malaria_raw["key"] == normalize(st.session_state.selected_municipio)
-            ]
+            ].drop(columns=["key"], errors="ignore")
         )
 
     elif disease == "dengue":
         st.dataframe(
             dengue_raw[
                 dengue_raw["key"] == normalize(st.session_state.selected_municipio)
-            ]
+            ].drop(columns=["key"], errors="ignore")
         )
 
     else:
@@ -489,19 +539,30 @@ if st.session_state.selected_municipio:
 # 그래프
 # =========================================
 st.subheader("📊 Distribución")
-fig = px.bar(df, x="municipio", y="value")
+
+fig = px.bar(df_filtered, x="municipio", y="value")
 st.plotly_chart(fig, use_container_width=True)
 
 # =========================================
 # 월별
 # =========================================
+if disease=="malaria":
+    st.subheader("📈 Tendencia mensual")
+    monthly = malaria_raw.groupby("Mes")["TOTAL"].sum().reset_index()
+    st.plotly_chart(px.line(monthly, x="Mes", y="TOTAL", markers=True), use_container_width=True)
+
 if disease=="dengue":
     st.subheader("📈 Tendencia mensual")
+
     monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
-    st.plotly_chart(px.line(monthly, x="Mes", y="value", markers=True), use_container_width=True)
+
+    st.plotly_chart(
+        px.line(monthly, x="Mes", y="value", markers=True),
+        use_container_width=True
+    )
 
 # =========================================
 # 테이블
 # =========================================
 st.subheader("📋 Datos detallados")
-st.dataframe(df.drop(columns=["key"], errors="ignore"))
+st.dataframe(df_filtered.drop(columns=["key"], errors="ignore"))
