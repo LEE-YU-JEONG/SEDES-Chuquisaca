@@ -261,13 +261,13 @@ Original file is located at
 # st.dataframe(df.drop(columns=["key"], errors="ignore"))
 
 from streamlit_folium import st_folium
-import plotly.express as px
 import streamlit as st
 import pandas as pd
 import unicodedata
 import folium
 import json
 import re
+import plotly.express as px
 
 # =========================================
 # 설정
@@ -311,19 +311,16 @@ def load_malaria():
 
     df["Municipio"] = df["Municipio"].astype(str).str.strip()
     df["key"] = df["Municipio"].apply(normalize)
+
     df["TOTAL"] = pd.to_numeric(df["TOTAL"], errors="coerce").fillna(0)
 
-    # 날짜 기반 Mes 생성 (무조건)
-    date_col = None
-    for c in df.columns:
-        if "fecha" in c.lower():
-            date_col = c
-            break
-
-    if date_col:
-        df["Mes"] = pd.to_datetime(df[date_col], errors="coerce").dt.month
+    # 🔥 중요: Mes 컬럼 생성 (없으면 그래프 깨짐)
+    if "Fecha" in df.columns:
+        df["Mes"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.month
+    elif "MES" in df.columns:
+        df["Mes"] = pd.to_numeric(df["MES"], errors="coerce")
     else:
-        df["Mes"] = None  # fallback
+        df["Mes"] = None
 
     grouped = df.groupby("key").agg({
         "Municipio":"first",
@@ -340,7 +337,7 @@ def load_malaria():
 # =========================================
 @st.cache_data
 def load_dengue():
-    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado", header=0)
+    df = pd.read_excel("BD_Encuesta Larvarias Aedes Aegypi 2025.xlsx", "Consolidado")
 
     df.columns = range(len(df.columns))
 
@@ -372,15 +369,28 @@ malaria_df, malaria_raw = load_malaria()
 dengue_df, dengue_raw = load_dengue()
 
 # =========================================
+# GEOJSON
+# =========================================
+with open("gadm41_BOL_3.json") as f:
+    geojson = json.load(f)
+
+geojson["features"] = [
+    f for f in geojson["features"]
+    if f["properties"]["NAME_1"]=="Chuquisaca"
+]
+
+# =========================================
 # SIDEBAR
 # =========================================
 st.sidebar.header("⚙️ Configuración")
 
 disease = st.sidebar.selectbox("Enfermedad", ["chagas","dengue","malaria"])
+
 sort_option = st.sidebar.selectbox(
     "Ordenar por",
     ["Mayor valor", "Menor valor", "Nombre A-Z", "Nombre Z-A"]
 )
+
 search_term = st.sidebar.text_input("🔍 Buscar municipio")
 top_n = st.sidebar.slider("Top N municipios", 5, 30, 15)
 show_hotspot = st.sidebar.checkbox("🔥 Mostrar Hotspots", True)
@@ -416,6 +426,61 @@ else:
 df_filtered = df_sorted.head(top_n)
 
 # =========================================
+# 선택 상태
+# =========================================
+if "selected_municipio" not in st.session_state:
+    st.session_state.selected_municipio = None
+
+# =========================================
+# HOTSPOT 계산
+# =========================================
+cutoff = df["value"].quantile(0.9)
+df["is_hotspot"] = df["value"] >= cutoff
+
+# =========================================
+# MAP
+# =========================================
+def get_row(name):
+    key = normalize(name)
+    r = df[df["key"]==key]
+    return r.iloc[0] if len(r) else None
+
+def style(feature):
+    name = feature["properties"]["NAME_3"]
+    row = get_row(name)
+
+    if row is None:
+        return {"fillColor":"gray"}
+
+    if st.session_state.selected_municipio == name:
+        return {"fillColor":"#2b83ba","color":"yellow","weight":4}
+
+    if show_hotspot and row["is_hotspot"]:
+        return {"fillColor":"#6a00ff","weight":3}
+
+    val = safe_float(row.get("value"))
+    color = "#1a9850" if val<5 else "#fee08b" if val<15 else "#d73027"
+
+    return {"fillColor":color,"fillOpacity":0.7}
+
+st.subheader("🗺️ Mapa")
+
+m = folium.Map(location=[-19,-65], zoom_start=8)
+
+for f in geojson["features"]:
+    folium.GeoJson(
+        f,
+        style_function=style,
+        tooltip=folium.GeoJsonTooltip(fields=["NAME_3"])
+    ).add_to(m)
+
+map_data = st_folium(m, width=800, height=500)
+
+# 클릭 선택
+if map_data and map_data.get("last_active_drawing"):
+    st.session_state.selected_municipio = map_data["last_active_drawing"]["properties"]["NAME_3"]
+
+# =========================================
 # 그래프
 # =========================================
 st.subheader("📊 Distribución")
@@ -429,35 +494,43 @@ mes_map = {
     7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"
 }
 
-# Dengue
-if disease=="dengue":
-    st.subheader("📈 Tendencia mensual")
-
-    monthly = dengue_raw.dropna(subset=["Mes"])
-    monthly = monthly.groupby("Mes")["value"].mean().reset_index()
-    monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
-
-    st.plotly_chart(
-        px.line(monthly, x="Mes_nombre", y="value", markers=True),
-        use_container_width=True
-    )
-
-# Malaria 완전 수정
+# MALARIA
 if disease=="malaria":
     st.subheader("📈 Tendencia mensual")
 
     monthly = malaria_raw.dropna(subset=["Mes"])
+    monthly = monthly.groupby("Mes")["TOTAL"].sum().reset_index()
 
-    if len(monthly) > 0:
-        monthly = monthly.groupby("Mes")["TOTAL"].sum().reset_index()
-        monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
+    monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
 
-        st.plotly_chart(
-            px.line(monthly, x="Mes_nombre", y="TOTAL", markers=True),
-            use_container_width=True
-        )
-    else:
-        st.warning("⚠️ No hay datos de fecha para malaria")
+    st.plotly_chart(
+        px.line(
+            monthly,
+            x="Mes_nombre",
+            y="TOTAL",
+            markers=True,
+            category_orders={"Mes_nombre": list(mes_map.values())}
+        ),
+        use_container_width=True
+    )
+
+# DENGUE
+if disease=="dengue":
+    st.subheader("📈 Tendencia mensual")
+
+    monthly = dengue_raw.groupby("Mes")["value"].mean().reset_index()
+    monthly["Mes_nombre"] = monthly["Mes"].map(mes_map)
+
+    st.plotly_chart(
+        px.line(
+            monthly,
+            x="Mes_nombre",
+            y="value",
+            markers=True,
+            category_orders={"Mes_nombre": list(mes_map.values())}
+        ),
+        use_container_width=True
+    )
 
 # =========================================
 # 테이블
