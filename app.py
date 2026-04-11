@@ -272,8 +272,8 @@ with col_legend:
             border: 1px solid #ddd;
             box-shadow: 2px 2px 10px rgba(0,0,0,0.12);
 
-            font-size: 15px;
-            margin-left: -200px;
+            font-size: 14px;
+            margin-left: -10px;
         ">
 
         <div style="
