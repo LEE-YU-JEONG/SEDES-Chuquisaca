@@ -244,7 +244,6 @@ with col_legend:
             font-size: 14px;
             min-width: 150px;
             z-index: 1000;
-            margin-left: -180px;
         ">
             <div style="
                 font-size: 18px;
