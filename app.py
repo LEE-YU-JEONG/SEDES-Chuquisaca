@@ -14,7 +14,7 @@ import re
 @st.cache_resource
 def get_engine():
     return create_engine(
-        "mysql+pymysql://root:YOUR_PASSWORD@localhost:3306/epidemiologia"
+        "mysql+pymysql://root:0000D@localhost:3306/epidemiologia"
     )
 
 def insert_vivienda(data):
