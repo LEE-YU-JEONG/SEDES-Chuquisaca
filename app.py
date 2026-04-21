@@ -337,7 +337,7 @@ st.subheader("📋 Datos detallados")
 st.dataframe(df.drop(columns=["key"], errors="ignore"))
 
 # =========================================
-# 17. INPUT POPUP
+# 17. DB INPUT POPUP
 # =========================================
 if st.session_state.show_form:
 
@@ -398,3 +398,63 @@ if st.session_state.show_form:
 
     if st.button("❌ Cerrar"):
         st.session_state.show_form = False
+
+# =========================
+# DB 조회 함수
+# =========================
+def load_viviendas():
+    engine = get_engine()
+    query = "SELECT * FROM viviendas ORDER BY fecha DESC"
+    return pd.read_sql(query, engine)
+
+# =========================
+# 삭제 함수
+# =========================
+def delete_vivienda(vivienda_id):
+    engine = get_engine()
+    query = text("DELETE FROM viviendas WHERE id = :id")
+
+    with engine.begin() as conn:
+        conn.execute(query, {"id": vivienda_id})
+
+# =========================
+# 18. DB 데이터 표시
+# =========================
+st.markdown("---")
+st.subheader("🏠 Viviendas Registradas")
+
+try:
+    viviendas_df = load_viviendas()
+
+    if len(viviendas_df) > 0:
+
+        # 보기 좋게 일부 컬럼 정리
+        display_df = viviendas_df.copy()
+
+        st.dataframe(display_df, use_container_width=True)
+
+        # =========================
+        # 삭제 UI
+        # =========================
+        st.markdown("### 🗑️ Eliminar registro")
+
+        col1, col2 = st.columns([3,1])
+
+        with col1:
+            selected_id = st.selectbox(
+                "Seleccionar registro",
+                viviendas_df["id"],
+                format_func=lambda x: f"ID {x} - {viviendas_df[viviendas_df['id']==x]['comunidad'].values[0]}"
+                )
+
+        with col2:
+            if st.button("Eliminar"):
+                delete_vivienda(selected_id)
+                st.success(f"ID {selected_id} eliminado")
+                st.rerun()
+
+    else:
+        st.info("No hay datos registrados")
+
+except Exception as e:
+    st.error(f"Error cargando datos: {e}")
