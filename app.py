@@ -440,7 +440,7 @@ def update_vivienda(data):
         conn.execute(query, data)
 
 # =========================================
-# 18. 데이터 테이블 (구버전 호환)
+# 18. 깔끔한 테이블 UI
 # =========================================
 st.markdown("---")
 st.subheader("🏠 Viviendas Registradas")
@@ -449,31 +449,38 @@ df = load_viviendas()
 
 if len(df) == 0:
     st.info("No hay datos registrados")
+
 else:
-    for i, row in df.iterrows():
+    # 헤더
+    header = st.columns([1,2,2,2,1,1])
+    header[0].markdown("**ID**")
+    header[1].markdown("**Comunidad**")
+    header[2].markdown("**Jefe**")
+    header[3].markdown("**Habitantes**")
+    header[4].markdown("**Editar**")
+    header[5].markdown("**Eliminar**")
 
-        with st.container():
-            col1, col2, col3 = st.columns([6,1,1])
+    st.markdown("---")
 
-            # 데이터 표시
-            with col1:
-                st.markdown(f"""
-                **ID:** {row['id']}  
-                **Comunidad:** {row['comunidad']}  
-                **Jefe:** {row['jefe_familia']}  
-                **Habitantes:** {row['num_habitantes']}
-                """)
+    # 데이터 행
+    for row in df.itertuples():
 
-            # 수정 버튼
-            with col2:
-                if st.button("✏️", key=f"edit_{row['id']}"):
-                    st.session_state.edit_target = row["id"]
+        cols = st.columns([1,2,2,2,1,1])
 
-            # 삭제 버튼
-            with col3:
-                if st.button("🗑️", key=f"del_{row['id']}"):
-                    st.session_state.delete_target = row["id"]
+        cols[0].write(row.id)
+        cols[1].write(row.comunidad)
+        cols[2].write(row.jefe_familia)
+        cols[3].write(row.num_habitantes)
 
+        # 수정 버튼
+        if cols[4].button("✏️", key=f"edit_{row.id}"):
+            st.session_state.edit_target = row.id
+            st.rerun()
+
+        # 삭제 버튼
+        if cols[5].button("🗑️", key=f"del_{row.id}"):
+            st.session_state.delete_target = row.id
+            st.rerun()
 # =========================================
 # 삭제 확인 UI
 # =========================================
@@ -496,7 +503,6 @@ if st.session_state.delete_target:
     with col2:
         if st.button("❌ Cancelar", key="cancel_delete"):
             st.session_state.delete_target = None
-
 
 # =========================================
 # 수정 UI
