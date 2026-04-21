@@ -11,6 +11,15 @@ import folium
 import json
 import re
 
+# =========================================
+# 상태 초기화
+# =========================================
+if "delete_target" not in st.session_state:
+    st.session_state.delete_target = None
+
+if "edit_target" not in st.session_state:
+    st.session_state.edit_target = None
+
 @st.cache_resource
 def get_engine():
     return create_engine(
@@ -431,15 +440,6 @@ def update_vivienda(data):
         conn.execute(query, data)
 
 # =========================================
-# 상태 초기화
-# =========================================
-if "delete_target" not in st.session_state:
-    st.session_state.delete_target = None
-
-if "edit_target" not in st.session_state:
-    st.session_state.edit_target = None
-
-# =========================================
 # 18. 데이터 테이블 (구버전 호환)
 # =========================================
 st.markdown("---")
@@ -473,3 +473,81 @@ else:
             with col3:
                 if st.button("🗑️", key=f"del_{row['id']}"):
                     st.session_state.delete_target = row["id"]
+
+# =========================================
+# 삭제 확인 UI
+# =========================================
+if st.session_state.delete_target:
+
+    target_id = st.session_state.delete_target
+    row = df[df["id"] == target_id].iloc[0]
+
+    st.warning(f"⚠️ ¿Eliminar ID {target_id} ({row['comunidad']})?")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✅ Sí eliminar", key="confirm_delete"):
+            delete_vivienda(target_id)
+            st.success("Eliminado")
+            st.session_state.delete_target = None
+            st.rerun()
+
+    with col2:
+        if st.button("❌ Cancelar", key="cancel_delete"):
+            st.session_state.delete_target = None
+
+
+# =========================================
+# 수정 UI
+# =========================================
+if st.session_state.edit_target:
+
+    target_id = st.session_state.edit_target
+    row = df[df["id"] == target_id].iloc[0]
+
+    st.markdown("---")
+    st.subheader(f"✏️ Editar ID {target_id}")
+
+    with st.form("edit_form"):
+
+        comunidad = st.text_input("Comunidad", row["comunidad"])
+        ci = st.text_input("CI", row["ci"])
+        jefe = st.text_input("Jefe de Familia", row["jefe_familia"])
+
+        col1, col2 = st.columns(2)
+        habitantes = col1.number_input("Habitantes", value=int(row["num_habitantes"]))
+        habitaciones = col2.number_input("Habitaciones", value=int(row["total_habitaciones"]))
+
+        col3, col4 = st.columns(2)
+        vm_intra = col3.selectbox("VM-Intra", ["SI","NO"], index=0 if row["vm_intra"] else 1)
+        vm_peri = col4.selectbox("VM-Peri", ["SI","NO"], index=0 if row["vm_peri"] else 1)
+
+        col5, col6, col7 = st.columns(3)
+        altitud = col5.number_input("Altitud", value=float(row["altitud"]))
+        latitud = col6.number_input("Latitud", value=float(row["latitud"]))
+        longitud = col7.number_input("Longitud", value=float(row["longitud"]))
+
+        submitted = st.form_submit_button("Guardar cambios")
+
+        if submitted:
+            update_vivienda({
+                "id": target_id,
+                "comunidad": comunidad,
+                "ci": ci,
+                "jefe_familia": jefe,
+                "num_habitantes": habitantes,
+                "total_habitaciones": habitaciones,
+                "vm_intra": vm_intra == "SI",
+                "vm_peri": vm_peri == "SI",
+                "altitud": altitud,
+                "latitud": latitud,
+                "longitud": longitud
+            })
+
+            st.success("Actualizado")
+            st.session_state.edit_target = None
+            st.rerun()
+
+    if st.button("Cerrar edición", key="close_edit"):
+        st.session_state.edit_target = None
