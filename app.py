@@ -399,62 +399,157 @@ if st.session_state.show_form:
     if st.button("❌ Cerrar"):
         st.session_state.show_form = False
 
-# =========================
-# DB 조회 함수
-# =========================
+# =========================================
+# DB 조회 / 수정 / 삭제
+# =========================================
 def load_viviendas():
     engine = get_engine()
-    query = "SELECT * FROM viviendas ORDER BY fecha DESC"
-    return pd.read_sql(query, engine)
+    return pd.read_sql("SELECT * FROM viviendas ORDER BY fecha DESC", engine)
 
-# =========================
-# 삭제 함수
-# =========================
 def delete_vivienda(vivienda_id):
     engine = get_engine()
-    query = text("DELETE FROM viviendas WHERE id = :id")
-
     with engine.begin() as conn:
-        conn.execute(query, {"id": vivienda_id})
+        conn.execute(text("DELETE FROM viviendas WHERE id = :id"), {"id": vivienda_id})
 
-# =========================
-# 18. DB 데이터 표시
-# =========================
+def update_vivienda(data):
+    engine = get_engine()
+    query = text("""
+    UPDATE viviendas SET
+        comunidad = :comunidad,
+        ci = :ci,
+        jefe_familia = :jefe_familia,
+        num_habitantes = :num_habitantes,
+        total_habitaciones = :total_habitaciones,
+        vm_intra = :vm_intra,
+        vm_peri = :vm_peri,
+        altitud = :altitud,
+        latitud = :latitud,
+        longitud = :longitud
+    WHERE id = :id
+    """)
+    with engine.begin() as conn:
+        conn.execute(query, data)
+
+# =========================================
+# 상태 초기화
+# =========================================
+if "delete_target" not in st.session_state:
+    st.session_state.delete_target = None
+
+if "edit_target" not in st.session_state:
+    st.session_state.edit_target = None
+
+# =========================================
+# 18. 데이터 테이블 (행별 버튼)
+# =========================================
 st.markdown("---")
 st.subheader("🏠 Viviendas Registradas")
 
-try:
-    viviendas_df = load_viviendas()
+df = load_viviendas()
 
-    if len(viviendas_df) > 0:
+if len(df) == 0:
+    st.info("No hay datos registrados")
+else:
+    display_df = df.copy()
 
-        # 보기 좋게 일부 컬럼 정리
-        display_df = viviendas_df.copy()
+    # 버튼 컬럼 추가
+    display_df["Eliminar"] = False
+    display_df["Editar"] = False
 
-        st.dataframe(display_df, use_container_width=True)
+    edited = st.data_editor(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Eliminar": st.column_config.ButtonColumn("🗑️ Eliminar"),
+            "Editar": st.column_config.ButtonColumn("✏️ Editar")
+        },
+        disabled=[c for c in display_df.columns if c not in ["Eliminar", "Editar"]]
+    )
 
-        # =========================
-        # 삭제 UI
-        # =========================
-        st.markdown("### 🗑️ Eliminar registro")
+    # =========================
+    # 클릭 감지
+    # =========================
+    for i in range(len(edited)):
+        if edited.loc[i, "Eliminar"]:
+            st.session_state.delete_target = int(edited.loc[i, "id"])
 
-        col1, col2 = st.columns([3,1])
+        if edited.loc[i, "Editar"]:
+            st.session_state.edit_target = int(edited.loc[i, "id"])
 
-        with col1:
-            selected_id = st.selectbox(
-                "Seleccionar registro",
-                viviendas_df["id"],
-                format_func=lambda x: f"ID {x} - {viviendas_df[viviendas_df['id']==x]['comunidad'].values[0]}"
-                )
+# =========================================
+# 삭제 확인 팝업
+# =========================================
+if st.session_state.delete_target:
 
-        with col2:
-            if st.button("Eliminar"):
-                delete_vivienda(selected_id)
-                st.success(f"ID {selected_id} eliminado")
-                st.rerun()
+    target_id = st.session_state.delete_target
+    row = df[df["id"] == target_id].iloc[0]
 
-    else:
-        st.info("No hay datos registrados")
+    st.warning(f"⚠️ ¿Eliminar registro ID {target_id} ({row['comunidad']})?")
 
-except Exception as e:
-    st.error(f"Error cargando datos: {e}")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✅ Sí, eliminar"):
+            delete_vivienda(target_id)
+            st.success("Eliminado correctamente")
+            st.session_state.delete_target = None
+            st.rerun()
+
+    with col2:
+        if st.button("❌ Cancelar"):
+            st.session_state.delete_target = None
+
+# =========================================
+# 수정 팝업 (Edit)
+# =========================================
+if st.session_state.edit_target:
+
+    target_id = st.session_state.edit_target
+    row = df[df["id"] == target_id].iloc[0]
+
+    st.markdown("---")
+    st.subheader(f"✏️ Editar ID {target_id}")
+
+    with st.form("edit_form"):
+
+        comunidad = st.text_input("Comunidad", row["comunidad"])
+        ci = st.text_input("CI", row["ci"])
+        jefe = st.text_input("Jefe de Familia", row["jefe_familia"])
+
+        col1, col2 = st.columns(2)
+        habitantes = col1.number_input("Habitantes", value=int(row["num_habitantes"]))
+        habitaciones = col2.number_input("Habitaciones", value=int(row["total_habitaciones"]))
+
+        col3, col4 = st.columns(2)
+        vm_intra = col3.selectbox("VM-Intra", ["SI","NO"], index=0 if row["vm_intra"] else 1)
+        vm_peri = col4.selectbox("VM-Peri", ["SI","NO"], index=0 if row["vm_peri"] else 1)
+
+        col5, col6, col7 = st.columns(3)
+        altitud = col5.number_input("Altitud", value=float(row["altitud"]))
+        latitud = col6.number_input("Latitud", value=float(row["latitud"]))
+        longitud = col7.number_input("Longitud", value=float(row["longitud"]))
+
+        submitted = st.form_submit_button("Guardar cambios")
+
+        if submitted:
+            update_vivienda({
+                "id": target_id,
+                "comunidad": comunidad,
+                "ci": ci,
+                "jefe_familia": jefe,
+                "num_habitantes": habitantes,
+                "total_habitaciones": habitaciones,
+                "vm_intra": vm_intra == "SI",
+                "vm_peri": vm_peri == "SI",
+                "altitud": altitud,
+                "latitud": latitud,
+                "longitud": longitud
+            })
+
+            st.success("✅ Actualizado")
+            st.session_state.edit_target = None
+            st.rerun()
+
+    if st.button("Cerrar edición"):
+        st.session_state.edit_target = None
