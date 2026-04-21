@@ -20,6 +20,9 @@ if "delete_target" not in st.session_state:
 if "edit_target" not in st.session_state:
     st.session_state.edit_target = None
 
+# =========================================
+# DB 연결
+# =========================================
 @st.cache_resource
 def get_engine():
     return create_engine(
@@ -409,7 +412,7 @@ if st.session_state.show_form:
         st.session_state.show_form = False
 
 # =========================================
-# DB 조회 / 수정 / 삭제
+# 18. DB 조회 / 수정 / 삭제
 # =========================================
 def load_viviendas():
     engine = get_engine()
@@ -440,7 +443,7 @@ def update_vivienda(data):
         conn.execute(query, data)
 
 # =========================================
-# 18. 전체 데이터 테이블 (Full Table + 버튼)
+# 19. 전체 데이터 테이블
 # =========================================
 st.markdown("---")
 st.subheader("🏠 Viviendas Registradas")
@@ -485,7 +488,7 @@ else:
             st.session_state.delete_target = row.id
             st.rerun()
 # =========================================
-# 삭제 확인 UI
+# 20. 삭제 확인 UI
 # =========================================
 if st.session_state.delete_target:
 
@@ -508,7 +511,7 @@ if st.session_state.delete_target:
             st.session_state.delete_target = None
 
 # =========================================
-# 수정 UI
+# 21. 수정 UI
 # =========================================
 if st.session_state.edit_target:
 
