@@ -440,7 +440,7 @@ def update_vivienda(data):
         conn.execute(query, data)
 
 # =========================================
-# 18. 깔끔한 테이블 UI
+# 18. 전체 데이터 테이블 (Full Table + 버튼)
 # =========================================
 st.markdown("---")
 st.subheader("🏠 Viviendas Registradas")
@@ -451,34 +451,37 @@ if len(df) == 0:
     st.info("No hay datos registrados")
 
 else:
-    # 헤더
-    header = st.columns([1,2,2,2,1,1])
-    header[0].markdown("**ID**")
-    header[1].markdown("**Comunidad**")
-    header[2].markdown("**Jefe**")
-    header[3].markdown("**Habitantes**")
-    header[4].markdown("**Editar**")
-    header[5].markdown("**Eliminar**")
+    # 컬럼 리스트
+    columns = list(df.columns)
+
+    # 헤더 + 버튼 컬럼 추가
+    header_cols = st.columns(len(columns) + 2)
+
+    for i, col_name in enumerate(columns):
+        header_cols[i].markdown(f"**{col_name.upper()}**")
+
+    header_cols[-2].markdown("**EDITAR**")
+    header_cols[-1].markdown("**ELIMINAR**")
 
     st.markdown("---")
 
-    # 데이터 행
-    for row in df.itertuples():
+    # 데이터 행 출력
+    for row in df.itertuples(index=False):
 
-        cols = st.columns([1,2,2,2,1,1])
+        row_cols = st.columns(len(columns) + 2)
 
-        cols[0].write(row.id)
-        cols[1].write(row.comunidad)
-        cols[2].write(row.jefe_familia)
-        cols[3].write(row.num_habitantes)
+        # 데이터 출력
+        for i, col_name in enumerate(columns):
+            value = getattr(row, col_name)
+            row_cols[i].write(value)
 
         # 수정 버튼
-        if cols[4].button("✏️", key=f"edit_{row.id}"):
+        if row_cols[-2].button("✏️", key=f"edit_{row.id}"):
             st.session_state.edit_target = row.id
             st.rerun()
 
         # 삭제 버튼
-        if cols[5].button("🗑️", key=f"del_{row.id}"):
+        if row_cols[-1].button("🗑️", key=f"del_{row.id}"):
             st.session_state.delete_target = row.id
             st.rerun()
 # =========================================
